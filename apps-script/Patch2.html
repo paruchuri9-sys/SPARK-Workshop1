@@ -1,0 +1,34 @@
+<script>
+(function(){
+  // v0.3.2 participant polling fix: update live pieces in place. Never rebuild
+  // #stageContent while a participant is entering data. Only a stage transition
+  // is allowed to replace the current stage.
+  function updatePromptOnly(next){
+    const b=document.querySelector('#promptBanner');
+    if(!b)return;
+    if(next.prompt){b.textContent=`Thought prompt: ${next.prompt}`;b.classList.remove('hidden');}
+    else b.classList.add('hidden');
+  }
+  function updateSaveStateOnly(text){const s=document.querySelector('#saveState');if(s)s.textContent=text||'';}
+  async function participantPollPartial(){
+    try{
+      const r=await callApi('state',{group:session.group,participant:session.participant});
+      if(!r||!r.state)return;
+      const next=r.state,priorStage=server?.stage||1,priorRecorder=server?.recorder||'';
+      server=next;
+      session.recorder=next.recorder===session.participant;
+      if((next.stage||1)!==priorStage){renderParticipant();return;}
+      updatePromptOnly(next);
+      if((next.recorder||'')!==priorRecorder){
+        const msg=session.recorder?'You are now the group recorder. Shared-entry controls will appear at the next stage.':(next.recorder?`${next.recorder} is the group recorder.`:'Recorder not yet assigned.');
+        updateSaveStateOnly(msg);
+      }
+    }catch(e){console.warn('SPARK participant state poll failed',e);}
+  }
+  if(session?.role==='participant'){
+    if(pollHandle)clearInterval(pollHandle);
+    pollHandle=setInterval(participantPollPartial,C.POLL_MS||3500);
+    refreshState=participantPollPartial;
+  }
+})();
+</script>
