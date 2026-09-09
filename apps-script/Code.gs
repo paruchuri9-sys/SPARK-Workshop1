@@ -1,10 +1,11 @@
 /**
- * SPARK Workshop 1 - Apps Script backend v0.3.1
+ * SPARK Workshop 1 - Apps Script backend v0.4
  * Bound to a Google Sheet.
  */
 const SHEETS = ["Config","Participants","Responses","Votes","Events","GroupData"];
 const STAGE_MINUTES = [4,6,5,8,7,5,6,8,18,25];
 const GROUP_IDS = ["1","2","3","4","5","6"];
+const ACCESS_KEY = "GoBears";
 
 function setup(){
   const ss=SpreadsheetApp.getActiveSpreadsheet();
@@ -18,14 +19,17 @@ function setup(){
   setConfig_("stage","1");
   setConfig_("deadline",String(Date.now()+STAGE_MINUTES[0]*60000));
   setConfig_("workshopTitle","SPARK Workshop 1");
-  GROUP_IDS.forEach(g=>upsertGroup_(g,"_prompt",""));
+  GROUP_IDS.forEach(g=>{upsertGroup_(g,"_prompt","");upsertGroup_(g,"_recorder","");});
 }
 
 function include(filename){ return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
 
 function doGet(e){
   const t=HtmlService.createTemplateFromFile("Index");
-  t.boot=JSON.stringify({role:(e&&e.parameter.role)||"participant",group:(e&&e.parameter.group)||"1"});
+  const requested=(e&&e.parameter.role)||"participant";
+  const key=(e&&e.parameter.key)||"";
+  const role=(requested==="participant"||key===ACCESS_KEY)?requested:"participant";
+  t.boot=JSON.stringify({role:role,group:(e&&e.parameter.group)||"1",key:key});
   return t.evaluate().setTitle("SPARK Workshop 1").addMetaTag("viewport","width=device-width, initial-scale=1");
 }
 
@@ -34,8 +38,8 @@ function api(action,payload){ return handle_({action:action,...(payload||{})}); 
 function handle_(q){
   const ss=SpreadsheetApp.getActiveSpreadsheet(),a=q.action;
   if(a==="join"){
-    ss.getSheetByName("Participants").appendRow([new Date(),q.participant,q.group,!!q.recorder]);
-    logEvent_(q.group,q.participant,"join",1,{recorder:!!q.recorder});
+    ss.getSheetByName("Participants").appendRow([new Date(),q.participant,q.group,false]);
+    logEvent_(q.group,q.participant,"join",1,{});
     return {ok:true};
   }
   if(a==="event"){
@@ -66,9 +70,13 @@ function handle_(q){
     if(Object.prototype.hasOwnProperty.call(patch,"prompt")){
       upsertGroup_(q.group,"_prompt",String(patch.prompt||""));
     }
-    ["deadline"].forEach(k=>{
-      if(Object.prototype.hasOwnProperty.call(patch,k)) setConfig_(k,String(patch[k]??""));
-    });
+    if(Object.prototype.hasOwnProperty.call(patch,"recorder")){
+      upsertGroup_(q.group,"_recorder",String(patch.recorder||""));
+      logEvent_(q.group,patch.recorder||"","recorder_assigned",getConfig_().stage||"",{});
+    }
+    if(Object.prototype.hasOwnProperty.call(patch,"deadline")){
+      setConfig_("deadline",String(patch.deadline??""));
+    }
     if(Object.prototype.hasOwnProperty.call(patch,"stage")){
       const s=Number(patch.stage),mins=STAGE_MINUTES[s-1]||5;
       setConfig_("stage",String(s));
@@ -89,6 +97,7 @@ function stateForGroup_(g){
     stage:all.stage,
     deadline:all.deadline,
     prompt:gd._prompt||"",
+    recorder:gd._recorder||"",
     selectedEvidence:all.selectedEvidenceByGroup[g]||[],
     votes:all.votes[g]||{},
     groupData:gd,
@@ -105,7 +114,7 @@ function allState_(){
 function initSheet_(sh,headers){if(sh.getLastRow()===0)sh.appendRow(headers);}
 function readParticipants_(){
   const v=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Participants").getDataRange().getValues(),m={};
-  v.slice(1).forEach(r=>{if(r[1])m[String(r[1])]={participant:String(r[1]),group:String(r[2]),recorder:!!r[3]};});
+  v.slice(1).forEach(r=>{if(r[1])m[String(r[1])]={participant:String(r[1]),group:String(r[2]),recorder:false};});
   return Object.values(m);
 }
 function readVotes_(){
