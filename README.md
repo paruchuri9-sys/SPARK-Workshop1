@@ -20,6 +20,7 @@ Major additions:
 - final enforceable-condition/monitoring stage,
 - consensus/majority/tie logic based on every participant submitting a choice,
 - facilitator-controlled latent thought prompts,
+- group-specific prompt exposure,
 - evidence-selection and decision-trajectory synthesis.
 
 ## UCA theme
@@ -37,7 +38,7 @@ Google Sheets = data store.**
 
 The repository root is a static demo/prototype. It works in local/demo mode with browser `localStorage`.
 
-For the live synchronized workshop, deploy the `apps-script/` version from a Google Sheet-bound Apps Script project. This avoids cross-origin/CORS fragility between GitHub Pages and Apps Script.
+For the live synchronized workshop, deploy the `apps-script/` version from a Google Sheet-bound Apps Script project. The Apps Script version is self-contained and does not depend on a CDN at runtime.
 
 ## Apps Script deployment
 
@@ -48,7 +49,9 @@ For the live synchronized workshop, deploy the `apps-script/` version from a Goo
    - `Index`
    - `Styles`
    - `App`
-5. Paste the matching repository files.
+   - `ScenarioData`
+   - `AppCore`
+5. Paste the matching repository files from `apps-script/`.
 6. Run `setup()` once and authorize.
 7. Deploy → New deployment → Web app.
 8. Execute as: **Me**.
@@ -71,7 +74,7 @@ The Google Sheet backend stores:
 - confidence values
 - group artifacts
 - evidence packet selections
-- prompt exposure
+- facilitator prompt exposure
 - readiness
 - stage transitions
 - facilitator notes
