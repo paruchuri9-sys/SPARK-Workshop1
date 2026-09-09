@@ -23,7 +23,7 @@
 <main class="shell">
   <section id="joinView" class="card join-card">
     <h2>Join your workshop group</h2>
-    <p class="muted">Individual choices are submitted privately. Group artifacts are entered by the recorder.</p>
+    <p class="muted">Individual choices are submitted privately. A facilitator can assign one participant as the group recorder after everyone joins.</p>
     <div class="grid two">
       <label>Participant code
         <input id="participantCode" autocomplete="off" placeholder="e.g., P12" />
@@ -32,12 +32,7 @@
         <select id="groupId"></select>
       </label>
     </div>
-    <label class="checkline"><input id="isRecorder" type="checkbox" /> I am this group's recorder</label>
     <button id="joinBtn" class="primary">Enter workshop</button>
-    <div class="role-links">
-      <a href="?role=facilitator&group=1">Facilitator view</a>
-      <a href="?role=synthesis">Synthesis view</a>
-    </div>
   </section>
 
   <section id="workshopView" class="hidden">
