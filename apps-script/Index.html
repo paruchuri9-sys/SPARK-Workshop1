@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="theme-color" content="#582C83">
+  <?!= include('Styles'); ?>
+</head>
+<body>
+<header class="topbar">
+  <div class="brandmark" aria-hidden="true">SPARK</div>
+  <div><div class="eyebrow">University of Central Arkansas</div><h1>SPARK Workshop 1</h1></div>
+  <div class="header-right"><span id="roleBadge" class="badge">Participant</span><span id="connectionBadge" class="badge secondary">Apps Script</span></div>
+</header>
+<main class="shell">
+  <section id="joinView" class="card join-card">
+    <h2>Join your workshop group</h2>
+    <p class="muted">Individual choices are submitted privately. Group artifacts are entered by the recorder.</p>
+    <div class="grid two"><label>Participant code<input id="participantCode" autocomplete="off" placeholder="e.g., P12"></label><label>Group<select id="groupId"></select></label></div>
+    <label class="checkline"><input id="isRecorder" type="checkbox"> I am this group's recorder</label>
+    <button id="joinBtn" class="primary">Enter workshop</button>
+  </section>
+  <section id="workshopView" class="hidden"><div class="stagebar card compact"><div><div class="eyebrow" id="stageKicker">Stage 1 of 10</div><h2 id="stageTitle">Starting Record</h2></div><div class="timerbox"><span class="timer-label">Time remaining</span><span id="timer">--:--</span></div></div><div id="promptBanner" class="prompt-banner hidden"></div><div id="stageContent"></div><div class="stage-actions"><button id="readyBtn" class="secondary-btn">We're ready</button><span id="saveState" class="muted"></span></div></section>
+  <section id="facilitatorView" class="hidden"></section>
+  <section id="synthesisView" class="hidden"></section>
+</main>
+<script>
+window.SPARK_APPS_SCRIPT=true;
+window.SPARK_BOOT=<?!= boot ?>;
+window.SPARK_CONFIG={API_URL:"",POLL_MS:3500,GROUPS:["1","2","3","4","5","6"]};
+</script>
+<?!= include('App'); ?>
+</body>
+</html>
