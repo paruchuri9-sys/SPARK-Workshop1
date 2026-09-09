@@ -1,34 +1,61 @@
 <script>
 (function(){
-  // v0.3.2 participant polling fix: update live pieces in place. Never rebuild
-  // #stageContent while a participant is entering data. Only a stage transition
-  // is allowed to replace the current stage.
+  // v0.3.3 participant polling fix. The earlier fix could still lose a race with
+  // the async boot sequence and allow the old full-render poller to survive.
+
   function updatePromptOnly(next){
     const b=document.querySelector('#promptBanner');
     if(!b)return;
     if(next.prompt){b.textContent=`Thought prompt: ${next.prompt}`;b.classList.remove('hidden');}
-    else b.classList.add('hidden');
+    else{b.textContent='';b.classList.add('hidden');}
   }
+
   function updateSaveStateOnly(text){const s=document.querySelector('#saveState');if(s)s.textContent=text||'';}
+
+  function updateVoteSummaryOnly(stage,next){
+    if(![5,6,8].includes(stage))return;
+    const cards=[...document.querySelectorAll('#stageContent .card')];
+    const current=cards.find(card=>card.querySelector('.eyebrow')?.textContent.trim()==='Current group result');
+    if(!current)return;
+    const temp=document.createElement('div');
+    temp.innerHTML=voteSummaryHtml(next.votes?.[`s${stage}`]||{});
+    const replacement=temp.firstElementChild;
+    if(replacement)current.replaceWith(replacement);
+  }
+
   async function participantPollPartial(){
     try{
+      if(!session?.participant)return;
       const r=await callApi('state',{group:session.group,participant:session.participant});
       if(!r||!r.state)return;
       const next=r.state,priorStage=server?.stage||1,priorRecorder=server?.recorder||'';
+      const priorVotes=JSON.stringify(server?.votes?.[`s${priorStage}`]||{});
+
       server=next;
       session.recorder=next.recorder===session.participant;
+
       if((next.stage||1)!==priorStage){renderParticipant();return;}
+
       updatePromptOnly(next);
+      const nextVotes=JSON.stringify(next.votes?.[`s${priorStage}`]||{});
+      if(nextVotes!==priorVotes)updateVoteSummaryOnly(priorStage,next);
+
       if((next.recorder||'')!==priorRecorder){
         const msg=session.recorder?'You are now the group recorder. Shared-entry controls will appear at the next stage.':(next.recorder?`${next.recorder} is the group recorder.`:'Recorder not yet assigned.');
         updateSaveStateOnly(msg);
       }
     }catch(e){console.warn('SPARK participant state poll failed',e);}
   }
-  if(session?.role==='participant'){
+
+  function takeOwnershipOfParticipantPolling(){
+    if(session?.role!=='participant')return;
+    refreshState=participantPollPartial;
     if(pollHandle)clearInterval(pollHandle);
     pollHandle=setInterval(participantPollPartial,C.POLL_MS||3500);
-    refreshState=participantPollPartial;
   }
+
+  takeOwnershipOfParticipantPolling();
+  setTimeout(takeOwnershipOfParticipantPolling,750);
+  setTimeout(takeOwnershipOfParticipantPolling,2000);
 })();
 </script>
