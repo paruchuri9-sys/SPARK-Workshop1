@@ -1,6 +1,6 @@
 /**
- * SPARK Workshop 1 - Apps Script backend v0.4
- * Bound to a Google Sheet.
+ * SPARK Workshop 1 - Apps Script backend v0.5
+ * Group-specific moderator release. No assigned recorder role.
  */
 const SHEETS = ["Config","Participants","Responses","Votes","Events","GroupData"];
 const STAGE_MINUTES = [4,6,5,8,7,5,6,8,18,25];
@@ -16,10 +16,13 @@ function setup(){
   initSheet_(ss.getSheetByName("Votes"),["timestamp","group","stage","participant","choice","confidence"]);
   initSheet_(ss.getSheetByName("Events"),["timestamp","group","participant","event","stage","detail"]);
   initSheet_(ss.getSheetByName("GroupData"),["group","key","json","updated"]);
-  setConfig_("stage","1");
-  setConfig_("deadline",String(Date.now()+STAGE_MINUTES[0]*60000));
   setConfig_("workshopTitle","SPARK Workshop 1");
-  GROUP_IDS.forEach(g=>{upsertGroup_(g,"_prompt","");upsertGroup_(g,"_recorder","");});
+  GROUP_IDS.forEach(g=>{
+    upsertGroup_(g,"_prompt","");
+    upsertGroup_(g,"_started",false);
+    upsertGroup_(g,"_stage",1);
+    upsertGroup_(g,"_deadline",null);
+  });
 }
 
 function include(filename){ return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
@@ -39,7 +42,7 @@ function handle_(q){
   const ss=SpreadsheetApp.getActiveSpreadsheet(),a=q.action;
   if(a==="join"){
     ss.getSheetByName("Participants").appendRow([new Date(),q.participant,q.group,false]);
-    logEvent_(q.group,q.participant,"join",1,{});
+    logEvent_(q.group,q.participant,"join",stateForGroup_(q.group).stage,{});
     return {ok:true};
   }
   if(a==="event"){
@@ -61,28 +64,26 @@ function handle_(q){
     logEvent_(q.group,q.participant||"","evidence_selected",3,{ids:q.ids});
     return {ok:true};
   }
-  if(a==="ready"){
-    logEvent_(q.group,q.participant,"ready",q.stage,{});
-    return {ok:true};
-  }
+  if(a==="ready") return {ok:true};
   if(a==="facilitator"){
-    const patch=q.patch||{};
-    if(Object.prototype.hasOwnProperty.call(patch,"prompt")){
-      upsertGroup_(q.group,"_prompt",String(patch.prompt||""));
+    const g=String(q.group||"1"),patch=q.patch||{},gd=readGroupData_()[g]||{};
+    if(Object.prototype.hasOwnProperty.call(patch,"prompt")) upsertGroup_(g,"_prompt",String(patch.prompt||""));
+    if(Object.prototype.hasOwnProperty.call(patch,"started")){
+      upsertGroup_(g,"_started",!!patch.started);
+      if(patch.started){
+        const stage=Number(gd._stage||1),mins=STAGE_MINUTES[stage-1]||5;
+        upsertGroup_(g,"_deadline",Date.now()+mins*60000);
+        logEvent_(g,"","scenario_started",stage,{});
+      }
     }
-    if(Object.prototype.hasOwnProperty.call(patch,"recorder")){
-      upsertGroup_(q.group,"_recorder",String(patch.recorder||""));
-      logEvent_(q.group,patch.recorder||"","recorder_assigned",getConfig_().stage||"",{});
-    }
-    if(Object.prototype.hasOwnProperty.call(patch,"deadline")){
-      setConfig_("deadline",String(patch.deadline??""));
-    }
+    if(Object.prototype.hasOwnProperty.call(patch,"deadline")) upsertGroup_(g,"_deadline",Number(patch.deadline)||null);
     if(Object.prototype.hasOwnProperty.call(patch,"stage")){
-      const s=Number(patch.stage),mins=STAGE_MINUTES[s-1]||5;
-      setConfig_("stage",String(s));
-      setConfig_("deadline",String(Date.now()+mins*60000));
-      GROUP_IDS.forEach(g=>upsertGroup_(g,"_prompt",""));
-      logEvent_(q.group||"","","stage_advanced",s,{});
+      const s=Math.max(1,Math.min(10,Number(patch.stage)||1)),mins=STAGE_MINUTES[s-1]||5;
+      upsertGroup_(g,"_stage",s);
+      upsertGroup_(g,"_started",true);
+      upsertGroup_(g,"_deadline",Date.now()+mins*60000);
+      upsertGroup_(g,"_prompt","");
+      logEvent_(g,"","stage_advanced",s,{});
     }
     return {ok:true};
   }
@@ -92,24 +93,29 @@ function handle_(q){
 }
 
 function stateForGroup_(g){
-  const all=allState_(),gd=all.groupData[g]||{};
+  const all=allState_(),gd=all.groupData[String(g)]||{};
   return {
-    stage:all.stage,
-    deadline:all.deadline,
+    started:!!gd._started,
+    stage:Number(gd._stage||1),
+    deadline:gd._deadline==null?null:Number(gd._deadline),
     prompt:gd._prompt||"",
-    recorder:gd._recorder||"",
-    selectedEvidence:all.selectedEvidenceByGroup[g]||[],
-    votes:all.votes[g]||{},
+    recorder:"",
+    selectedEvidence:all.selectedEvidenceByGroup[String(g)]||[],
+    votes:all.votes[String(g)]||{},
     groupData:gd,
     participants:(all.participants||[]).filter(p=>String(p.group)===String(g)),
-    ready:(all.ready[g]||[])
+    ready:[]
   };
 }
 function allState_(){
-  const cfg=getConfig_(),gd=readGroupData_(),votes=readVotes_(),participants=readParticipants_(),ready=readReady_();
-  const selected={};
-  Object.keys(gd).forEach(g=>selected[g]=gd[g].selectedEvidence||[]);
-  return {stage:Number(cfg.stage||1),deadline:Number(cfg.deadline||0)||null,selectedEvidenceByGroup:selected,votes,groupData:gd,participants,ready};
+  const gd=readGroupData_(),votes=readVotes_(),participants=readParticipants_();
+  const selected={},control={};
+  GROUP_IDS.forEach(g=>{
+    const x=gd[g]||{};
+    selected[g]=x.selectedEvidence||[];
+    control[g]={started:!!x._started,stage:Number(x._stage||1),deadline:x._deadline==null?null:Number(x._deadline)};
+  });
+  return {groupControl:control,selectedEvidenceByGroup:selected,votes,groupData:gd,participants,ready:{}};
 }
 function initSheet_(sh,headers){if(sh.getLastRow()===0)sh.appendRow(headers);}
 function readParticipants_(){
@@ -123,16 +129,6 @@ function readVotes_(){
     const g=String(r[1]),s="s"+r[2],p=String(r[3]);
     o[g]=o[g]||{};o[g][s]=o[g][s]||{};
     o[g][s][p]={choice:r[4],confidence:Number(r[5]),ts:new Date(r[0]).getTime()};
-  });
-  return o;
-}
-function readReady_(){
-  const v=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Events").getDataRange().getValues(),o={};
-  v.slice(1).forEach(r=>{
-    if(r[3]==="ready"){
-      const g=String(r[1]);o[g]=o[g]||[];
-      if(!o[g].includes(String(r[2])))o[g].push(String(r[2]));
-    }
   });
   return o;
 }
@@ -162,9 +158,7 @@ function getConfig_(){
 }
 function setConfig_(k,val){
   const sh=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Config"),v=sh.getDataRange().getValues();
-  for(let i=1;i<v.length;i++){
-    if(v[i][0]===k){sh.getRange(i+1,2).setValue(val);return;}
-  }
+  for(let i=1;i<v.length;i++)if(v[i][0]===k){sh.getRange(i+1,2).setValue(val);return;}
   sh.appendRow([k,val]);
 }
 function logEvent_(g,p,event,stage,detail){
