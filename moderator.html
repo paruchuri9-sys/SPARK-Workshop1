@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#582C83" />
+  <title>SPARK Workshop 1 · Moderator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brandmark" aria-hidden="true">SPARK</div>
+  <div><div class="eyebrow">University of Central Arkansas</div><h1>Workshop 1 · Moderator</h1></div>
+  <div class="header-right"><span class="badge">Moderator</span></div>
+</header>
+<main class="shell">
+  <section class="card join-card">
+    <h2>Moderator entry</h2>
+    <p class="muted">Each moderator is tied to one group. You will start the scenario and release each phase for that group.</p>
+    <label>Assigned group
+      <select id="modGroup">
+        <option value="1">Group 1</option><option value="2">Group 2</option><option value="3">Group 3</option>
+        <option value="4">Group 4</option><option value="5">Group 5</option><option value="6">Group 6</option>
+      </select>
+    </label>
+    <label>Moderator key
+      <input id="modKey" type="password" autocomplete="off" placeholder="Enter moderator key" />
+    </label>
+    <button id="enterModerator" class="primary">Open moderator controls</button>
+    <p id="modError" class="muted" aria-live="polite"></p>
+  </section>
+</main>
+<script>
+(function(){
+  const KEY='GoBears';
+  document.getElementById('enterModerator').addEventListener('click',()=>{
+    const key=document.getElementById('modKey').value;
+    const group=document.getElementById('modGroup').value;
+    if(key!==KEY){document.getElementById('modError').textContent='Incorrect moderator key.';return;}
+    location.href=`./?role=facilitator&group=${encodeURIComponent(group)}&key=${encodeURIComponent(key)}`;
+  });
+})();
+</script>
+</body>
+</html>
