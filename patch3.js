@@ -1,16 +1,20 @@
 (function(){
-  // v0.3.3: bounded local progression. Participants may move one stage ahead of
-  // the facilitator's released stage. Same-stage polling only updates small live regions.
+  // v0.4: bounded local progression. Teachers/players may move at most one stage
+  // ahead of their group's moderator. Review mode may inspect all stages.
+  const reviewMode=new URLSearchParams(location.search).get('review')==='1';
   const progressKey=()=>`spark_view_stage_${session.participant||'anon'}`;
   let viewStage=Math.max(1,Math.min(10,Number(localStorage.getItem(progressKey())||server.stage||1)));
 
-  function releasedStage(){return Number(server.stage||1)}
+  function releasedStage(){return server.started===false?0:Number(server.stage||1)}
   function maxParticipantStage(){
-    // Static GitHub preview is intentionally freer for testing. Live synchronized
-    // workshop participants can be at most one stage ahead of the facilitator.
-    return apiEnabled()?Math.min(10,releasedStage()+1):10;
+    if(reviewMode)return 10;
+    const released=releasedStage();
+    return released===0?0:Math.min(10,released+1);
   }
-  function currentStage(){return Math.max(1,Math.min(viewStage,maxParticipantStage()))}
+  function currentStage(){
+    if(!reviewMode && maxParticipantStage()===0)return 0;
+    return Math.max(1,Math.min(viewStage,maxParticipantStage()||1));
+  }
 
   function groupStartingPoints(){
     const gd=server.groupData||{};
@@ -31,13 +35,10 @@
   };
 
   function participantCanAdvance(st){
-    if(st>=10)return false;
+    if(st<=0||st>=10)return false;
     if(st>=maxParticipantStage())return false;
-    // Stage 1 requires this participant's submitted vote before moving ahead.
     if(st===1)return !!server.votes?.s1?.[session.participant];
-    // Stage 3 cannot advance until the group recorder has locked exactly two packets.
     if(st===3)return (server.selectedEvidence||[]).length===2;
-    // Decision stages require this participant's own submission first.
     if([5,6,8].includes(st))return !!server.votes?.[`s${st}`]?.[session.participant];
     return true;
   }
@@ -50,10 +51,11 @@
       if(old)old.replaceWith(nav);else document.querySelector('#workshopView')?.appendChild(nav);
     }
     const st=currentStage();
+    if(st===0){nav.innerHTML='<span class="muted">Waiting for your group moderator to start the scenario.</span>';return;}
     const behind=st>1;
     const ahead=participantCanAdvance(st);
     const waiting=st<10 && st>=maxParticipantStage();
-    nav.innerHTML=`${behind?'<button type="button" class="ghost" id="prevParticipant">← Previous</button>':''}<span class="muted" id="participantProgressNote">${waiting?'Waiting for the facilitator to release the next stage.':''}</span>${ahead?'<button type="button" class="primary" id="nextParticipant">Next →</button>':''}`;
+    nav.innerHTML=`${behind?'<button type="button" class="ghost" id="prevParticipant">← Previous</button>':''}<span class="muted" id="participantProgressNote">${waiting?'You are at the furthest page currently available. Waiting for the moderator to start the next phase.':''}</span>${ahead?'<button type="button" class="primary" id="nextParticipant">Next →</button>':''}`;
     document.querySelector('#prevParticipant')?.addEventListener('click',()=>{viewStage=Math.max(1,st-1);localStorage.setItem(progressKey(),viewStage);renderParticipant();});
     document.querySelector('#nextParticipant')?.addEventListener('click',()=>{viewStage=Math.min(10,st+1,maxParticipantStage());localStorage.setItem(progressKey(),viewStage);renderParticipant();});
   }
@@ -62,7 +64,14 @@
   renderParticipant=function(){
     const actual=server.stage;
     const st=currentStage();
-    // Render the participant's local stage without changing the shared facilitator state.
+    if(st===0){
+      document.querySelector('#stageKicker').textContent='Waiting';
+      document.querySelector('#stageTitle').textContent='Scenario has not started';
+      document.querySelector('#stageContent').innerHTML='<section class="card stage-card"><h3>Waiting for the moderator</h3><p>Your group moderator will start the scenario. Once it begins, Stage 1 will appear automatically.</p></section>';
+      document.querySelector('#timer').textContent='--:--';
+      updateNav();
+      return;
+    }
     server.stage=st;
     baseRenderParticipant();
     server.stage=actual;
@@ -88,16 +97,15 @@
 
   async function partialPoll(){
     try{
-      const priorRelease=releasedStage();
+      const priorRelease=releasedStage(),priorStarted=server.started;
       const r=await callApi('state',{group:session.group,participant:session.participant});
       if(!r?.state)return;
       server=r.state;
-      session.recorder=server.recorder===session.participant;
+      session.recorder=false;
       const newRelease=releasedStage();
-      // Never rebuild merely because data arrived. If release advances, only rebuild
-      // if the participant was waiting at the bounded edge and now has a new page available.
+      if(priorStarted!==server.started){renderParticipant();return;}
+      if(viewStage>maxParticipantStage() && maxParticipantStage()>0)viewStage=maxParticipantStage();
       updateSmallRegions(server);
-      if(viewStage>maxParticipantStage())viewStage=maxParticipantStage();
       if(newRelease!==priorRelease)updateNav();
     }catch(e){console.warn('SPARK partial participant poll failed',e)}
   }
@@ -107,11 +115,9 @@
     pollHandle=setInterval(partialPoll,C.POLL_MS||3500);
     refreshState=async function(){
       const r=await callApi('state',{group:session.group,participant:session.participant});
-      if(r?.state){server=r.state;session.recorder=server.recorder===session.participant;}
-      updateSmallRegions(server);
-      updateNav();
+      if(r?.state){server=r.state;session.recorder=false;}
+      renderParticipant();
     };
-    // Remove stale generic Ready control immediately.
     document.querySelector('#readyBtn')?.remove();
     try{renderParticipant()}catch(e){console.warn('SPARK local progression render deferred',e)}
   }
