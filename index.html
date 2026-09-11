@@ -24,8 +24,9 @@
     <div id="groupCards"></div>
     <button id="joinBtn" class="primary join-action">Enter workshop</button>
   </section>
+
   <section id="workshopView" class="hidden">
-    <div style="margin-bottom:10px"><button id="backToJoinBtn" type="button" class="secondary-btn">← Change name / role / group</button></div>
+    <div style="margin-bottom:10px"><button id="changeSessionBtn" type="button" class="secondary-btn">← Change name / role / group</button></div>
     <div class="stagebar card compact">
       <div><div class="eyebrow" id="stageKicker">Phase 1 of 9</div><h2 id="stageTitle">Starting Record</h2></div>
       <div class="timerbox" aria-live="polite"><span class="timer-label">Time remaining</span><span id="timer">--:--</span></div>
@@ -33,15 +34,13 @@
     <div id="promptBanner" class="prompt-banner hidden"></div>
     <div id="stageContent"></div>
   </section>
+
   <section id="waitingView" class="hidden"></section>
   <section id="facilitatorView" class="hidden"></section>
 </main>
 <script src="config.js?v=2"></script>
 <script src="bridge.js?v=2"></script>
-<script src="scenario-data.js"></script>
-<script src="app5.js?v=7"></script>
-<script src="moderator-lite.js?v=3"></script>
-<script src="manual-flow.js?v=2"></script>
-<script src="session-controls.js?v=2"></script>
+<script src="scenario-data.js?v=1"></script>
+<script src="workshop.js?v=1"></script>
 </body>
 </html>
