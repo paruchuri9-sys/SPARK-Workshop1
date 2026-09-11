@@ -1,5 +1,5 @@
 // SPARK Workshop 1 manual-flow policy.
-// One shared group stage + one shared group deadline. Submission never advances a phase.
+// One shared group phase + one shared group deadline. Submission never advances a phase.
 
 MOD_GUIDE[1].do='Let everyone work independently. Submitting does not move the group. Click Next phase when the room is ready.';
 MOD_GUIDE[2].do='Keep the discussion moving. Clarify instructions only. Click Next phase when the room is ready.';
@@ -9,13 +9,12 @@ MOD_GUIDE[5].do='Do not force consensus. Preserve disagreement. Click Next phase
 MOD_GUIDE[6].do='Do not imply that participants should change position. Click Next phase when the room is ready.';
 MOD_GUIDE[7].do='Encourage a serious case, not a straw man. Click Next phase when the room is ready.';
 MOD_GUIDE[8].do='Preserve dissent. Do not push for agreement. Click Next phase when the room is ready.';
-MOD_GUIDE[9].do='Focus on authenticity, reasoning opportunities, scaffolds and observability. Click Next phase when ready.';
-MOD_GUIDE[10].do='Keep the group concrete: existing activity, decision, uncertainty, evidence, minimal support and observable output.';
+MOD_GUIDE[9].do='Focus on authenticity, reasoning opportunities, scaffolds and observability. When finished, ask everyone to return to the main Zoom room.';
 
 // Everyone follows the moderator's authoritative group phase immediately.
 syncViewToServer = function(){
   if(REVIEW) return;
-  const s=Math.max(1,Math.min(10,Number(server.stage)||1));
+  const s=Math.max(1,Math.min(9,Number(server.stage)||1));
   if(viewStage!==s){
     viewStage=s;
     localStorage.setItem(`spark_stage_${session.id}`,viewStage);
@@ -35,7 +34,7 @@ demoApi = async function(action,p={}){
     if(role==='moderator'&&p.key!==C.MODERATOR_KEY) return {ok:false,error:'Incorrect moderator code'};
     d.people[p.id]={id:p.id,name:p.name,group:g,role,ts:now()};
     if(role==='moderator'&&!c.started){
-      c.started=true; c.stage=Math.max(1,Number(c.stage)||1); c.deadline=now()+STAGES[c.stage-1].mins*60000; c.prompt='';
+      c.started=true; c.stage=Math.max(1,Math.min(9,Number(c.stage)||1)); c.deadline=now()+STAGES[c.stage-1].mins*60000; c.prompt='';
     }
   }
   if(action==='vote'){
@@ -49,7 +48,7 @@ demoApi = async function(action,p={}){
     if(p.key!==C.MODERATOR_KEY) return {ok:false,error:'Invalid moderator code'};
     const patch=p.patch||{};
     if(Object.prototype.hasOwnProperty.call(patch,'stage')){
-      c.stage=Math.max(1,Math.min(10,Number(patch.stage)||1));
+      c.stage=Math.max(1,Math.min(9,Number(patch.stage)||1));
       c.started=true; c.deadline=now()+STAGES[c.stage-1].mins*60000; c.prompt='';
     }
     if(Object.prototype.hasOwnProperty.call(patch,'deadline')) c.deadline=patch.deadline;
