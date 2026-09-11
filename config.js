@@ -1,5 +1,6 @@
 window.SPARK_CONFIG = {
   API_URL: "",
-  POLL_MS: 3500,
-  GROUPS: ["1","2","3","4","5","6"]
+  POLL_MS: 2500,
+  MODERATOR_KEY: "GoBears",
+  GROUPS: ["Owl","Fox","Raven","Dolphin","Octopus"]
 };
