@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#582C83">
-  <link rel="stylesheet" href="https://paruchuri9-sys.github.io/SPARK-Workshop1/styles.css?v=2">
+  <link rel="stylesheet" href="https://paruchuri9-sys.github.io/SPARK-Workshop1/styles.css?v=3">
 </head>
 <body>
 <header class="topbar">
@@ -32,9 +32,9 @@
 <script>
 window.SPARK_APPS_SCRIPT=true;
 window.SPARK_BOOT=<?!= boot ?>;
-window.SPARK_CONFIG={API_URL:'',POLL_MS:2500,MODERATOR_KEY:'GoBears',GROUPS:['Owl','Fox','Raven','Dolphin','Octopus']};
+window.SPARK_CONFIG={API_URL:'',POLL_MS:2500,MODERATOR_KEY:(window.SPARK_BOOT.key||''),GROUPS:['Owl','Fox','Raven','Dolphin','Octopus']};
 </script>
 <?!= include('ScenarioData'); ?>
-<script src="https://paruchuri9-sys.github.io/SPARK-Workshop1/app2.js?v=2"></script>
+<script src="https://paruchuri9-sys.github.io/SPARK-Workshop1/app3.js?v=3"></script>
 </body>
 </html>
