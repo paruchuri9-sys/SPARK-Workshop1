@@ -1,4 +1,4 @@
-/** SPARK Workshop 1 production backend v1.0 */
+/** SPARK Workshop 1 production backend v1.1: automatic phase flow */
 const ACCESS_KEY='GoBears';
 const GROUP_IDS=['Owl','Fox','Raven','Dolphin','Octopus'];
 const STAGE_MINUTES=[4,6,5,8,7,5,6,8,18,25];
@@ -13,34 +13,126 @@ function doGet(e){
   t.boot=JSON.stringify({role:role,group:(e&&e.parameter.group)||'',key:key});
   return t.evaluate().setTitle('SPARK Workshop 1').addMetaTag('viewport','width=device-width, initial-scale=1');
 }
-function api(action,payload){ensureSetup_();return handle_({action:action,...(payload||{})});}
+function api(action,payload){
+  ensureSetup_();
+  const lock=LockService.getScriptLock();
+  lock.waitLock(10000);
+  try{return handle_({action:action,...(payload||{})});}
+  finally{lock.releaseLock();}
+}
 
 function ensureSetup_(){
  const ss=SpreadsheetApp.getActiveSpreadsheet();
- const defs={};defs[SHEETS.participants]=['timestamp','id','name','group'];defs[SHEETS.responses]=['timestamp','group','key','participant_id','json'];defs[SHEETS.votes]=['timestamp','group','stage','participant_id','name','choice','confidence'];defs[SHEETS.events]=['timestamp','group','participant_id','event','stage','detail'];defs[SHEETS.group]=['group','key','json','updated'];
+ const defs={};
+ defs[SHEETS.participants]=['timestamp','id','name','group'];
+ defs[SHEETS.responses]=['timestamp','group','key','participant_id','json'];
+ defs[SHEETS.votes]=['timestamp','group','stage','participant_id','name','choice','confidence'];
+ defs[SHEETS.events]=['timestamp','group','participant_id','event','stage','detail'];
+ defs[SHEETS.group]=['group','key','json','updated'];
  Object.keys(defs).forEach(n=>{let sh=ss.getSheetByName(n);if(!sh)sh=ss.insertSheet(n);if(sh.getLastRow()===0)sh.appendRow(defs[n]);});
  GROUP_IDS.forEach(g=>{if(readGroupValue_(g,'_stage')===undefined){upsertGroup_(g,'_started',false);upsertGroup_(g,'_stage',1);upsertGroup_(g,'_deadline',null);upsertGroup_(g,'_prompt','');}});
 }
 function handle_(q){
  const a=q.action,ss=SpreadsheetApp.getActiveSpreadsheet(),g=String(q.group||'');
- if(a==='join'){if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};upsertParticipant_(q.id,q.name,g);logEvent_(g,q.id,'join',stateForGroup_(g).stage,{name:q.name});return {ok:true};}
- if(a==='state')return {ok:true,state:stateForGroup_(g)};
- if(a==='vote'){if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};ss.getSheetByName(SHEETS.votes).appendRow([new Date(),g,q.stage,q.id,q.name||'',q.choice,q.confidence]);logEvent_(g,q.id,'decision_submit',q.stage,{choice:q.choice,confidence:q.confidence});return {ok:true};}
- if(a==='submit'){if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};upsertGroup_(g,q.key,q.value);ss.getSheetByName(SHEETS.responses).appendRow([new Date(),g,q.key,q.id||'',JSON.stringify(q.value||{})]);return {ok:true};}
- if(a==='selectEvidence'){if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};upsertGroup_(g,'selectedEvidence',q.ids||[]);logEvent_(g,q.id,'evidence_selected',3,{ids:q.ids||[]});return {ok:true};}
- if(a==='event'){if(q.key&&q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator key'};logEvent_(g,q.id||'',q.event||'',q.stage||'',q);return {ok:true};}
+ if(a==='join'){
+   if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+   upsertParticipant_(q.id,q.name,g);
+   if(!readGroupValue_(g,'_started'))startGroup_(g);
+   logEvent_(g,q.id,'join',Number(readGroupValue_(g,'_stage')||1),{name:q.name});
+   maybeAutoAdvance_(g);
+   return {ok:true};
+ }
+ if(a==='state'){
+   if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+   maybeAutoAdvance_(g);
+   return {ok:true,state:stateForGroup_(g)};
+ }
+ if(a==='vote'){
+   if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+   ss.getSheetByName(SHEETS.votes).appendRow([new Date(),g,q.stage,q.id,q.name||'',q.choice,q.confidence]);
+   logEvent_(g,q.id,'decision_submit',q.stage,{choice:q.choice,confidence:q.confidence});
+   maybeAutoAdvance_(g);
+   return {ok:true};
+ }
+ if(a==='submit'){
+   if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+   upsertGroup_(g,q.key,q.value);
+   ss.getSheetByName(SHEETS.responses).appendRow([new Date(),g,q.key,q.id||'',JSON.stringify(q.value||{})]);
+   maybeAutoAdvance_(g);
+   return {ok:true};
+ }
+ if(a==='selectEvidence'){
+   if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+   upsertGroup_(g,'selectedEvidence',q.ids||[]);
+   logEvent_(g,q.id,'evidence_selected',3,{ids:q.ids||[]});
+   maybeAutoAdvance_(g);
+   return {ok:true};
+ }
+ if(a==='event'){
+   if(q.key&&q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator key'};
+   logEvent_(g,q.id||'',q.event||'',q.stage||'',q);
+   return {ok:true};
+ }
  if(a==='moderator'){
    if(q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator key'};
    if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
    const patch=q.patch||{};
-   if(Object.prototype.hasOwnProperty.call(patch,'started'))upsertGroup_(g,'_started',!!patch.started);
-   if(Object.prototype.hasOwnProperty.call(patch,'stage')){const s=Math.max(1,Math.min(10,Number(patch.stage)||1));upsertGroup_(g,'_stage',s);upsertGroup_(g,'_started',true);upsertGroup_(g,'_deadline',Date.now()+(STAGE_MINUTES[s-1]||5)*60000);upsertGroup_(g,'_prompt','');logEvent_(g,'','phase_started',s,{});}
+   if(Object.prototype.hasOwnProperty.call(patch,'stage')){
+     const s=Math.max(1,Math.min(10,Number(patch.stage)||1));
+     setStage_(g,s,'moderator_override');
+   }
    if(Object.prototype.hasOwnProperty.call(patch,'deadline'))upsertGroup_(g,'_deadline',patch.deadline==null?null:Number(patch.deadline));
-   if(Object.prototype.hasOwnProperty.call(patch,'prompt')){upsertGroup_(g,'_prompt',String(patch.prompt||''));logEvent_(g,'','prompt_changed',stateForGroup_(g).stage,{prompt:String(patch.prompt||'')});}
+   if(Object.prototype.hasOwnProperty.call(patch,'prompt')){
+     upsertGroup_(g,'_prompt',String(patch.prompt||''));
+     logEvent_(g,'','prompt_changed',Number(readGroupValue_(g,'_stage')||1),{prompt:String(patch.prompt||'')});
+   }
    return {ok:true};
  }
- if(a==='resetWorkshop'){if(q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator key'};GROUP_IDS.forEach(x=>{upsertGroup_(x,'_started',false);upsertGroup_(x,'_stage',1);upsertGroup_(x,'_deadline',null);upsertGroup_(x,'_prompt','');upsertGroup_(x,'selectedEvidence',[]);});return {ok:true};}
+ if(a==='resetWorkshop'){
+   if(q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator key'};
+   GROUP_IDS.forEach(x=>{upsertGroup_(x,'_started',false);upsertGroup_(x,'_stage',1);upsertGroup_(x,'_deadline',null);upsertGroup_(x,'_prompt','');upsertGroup_(x,'selectedEvidence',[]);});
+   return {ok:true};
+ }
  return {ok:false,error:'Unknown action: '+a};
+}
+function startGroup_(g){
+ upsertGroup_(g,'_started',true);
+ upsertGroup_(g,'_stage',1);
+ upsertGroup_(g,'_deadline',Date.now()+STAGE_MINUTES[0]*60000);
+ upsertGroup_(g,'_prompt','');
+ logEvent_(g,'','phase_started',1,{reason:'first_participant_join'});
+}
+function setStage_(g,s,reason){
+ upsertGroup_(g,'_started',true);
+ upsertGroup_(g,'_stage',s);
+ upsertGroup_(g,'_deadline',Date.now()+(STAGE_MINUTES[s-1]||5)*60000);
+ upsertGroup_(g,'_prompt','');
+ logEvent_(g,'','phase_started',s,{reason:reason||'advance'});
+}
+function maybeAutoAdvance_(g){
+ let guard=0;
+ while(guard++<10){
+   const gd=readGroupData_()[g]||{},s=Number(gd._stage||1);
+   if(!gd._started||s>=10||!phaseComplete_(g,s,gd))return;
+   setStage_(g,s+1,'automatic_completion');
+ }
+}
+function phaseComplete_(g,s,gd){
+ const ps=readParticipants_().filter(p=>p.group===g),votes=readVotesForGroup_(g)[`s${s}`]||{};
+ const allVoted=ps.length>=2&&ps.every(p=>!!votes[p.id]);
+ if(s===1){
+   const deadline=Number(gd._deadline||0),startedAt=deadline?deadline-STAGE_MINUTES[0]*60000:Date.now();
+   return allVoted&&(Date.now()-startedAt>=30000);
+ }
+ if(s===2)return !!gd.stage2;
+ if(s===3)return !!gd.stage3&&Array.isArray(gd.selectedEvidence)&&gd.selectedEvidence.length===2;
+ if(s===4)return !!gd.stage4;
+ if(s===5)return allVoted&&!!gd.stage5;
+ if(s===6)return allVoted;
+ if(s===7)return !!gd.stage7;
+ if(s===8)return allVoted&&!!gd.stage8;
+ if(s===9)return !!gd.stage9;
+ return false;
 }
 function stateForGroup_(g){
  const gd=readGroupData_()[g]||{};
