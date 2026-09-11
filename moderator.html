@@ -16,29 +16,32 @@
 <main class="shell">
   <section class="card join-card">
     <h2>Moderator entry</h2>
-    <p class="muted">Each moderator is tied to one group. You will start the scenario and release each phase for that group.</p>
-    <label>Assigned group
-      <select id="modGroup">
-        <option value="1">Group 1</option><option value="2">Group 2</option><option value="3">Group 3</option>
-        <option value="4">Group 4</option><option value="5">Group 5</option><option value="6">Group 6</option>
-      </select>
-    </label>
-    <label>Moderator key
-      <input id="modKey" type="password" autocomplete="off" placeholder="Enter moderator key" />
-    </label>
-    <button id="enterModerator" class="primary">Open moderator controls</button>
+    <p class="muted">Select the breakout group you are moderating. Each moderator controls only that group's phase releases.</p>
+    <label>Your assigned group</label>
+    <div class="group-cards" id="modGroups">
+      <button type="button" class="group-card" data-group="Owl"><span class="group-emoji">🦉</span><span>Owl</span></button>
+      <button type="button" class="group-card" data-group="Fox"><span class="group-emoji">🦊</span><span>Fox</span></button>
+      <button type="button" class="group-card" data-group="Raven"><span class="group-emoji">🐦‍⬛</span><span>Raven</span></button>
+      <button type="button" class="group-card" data-group="Dolphin"><span class="group-emoji">🐬</span><span>Dolphin</span></button>
+      <button type="button" class="group-card" data-group="Octopus"><span class="group-emoji">🐙</span><span>Octopus</span></button>
+    </div>
+    <label>Moderator key<input id="modKey" type="password" autocomplete="off" placeholder="Enter moderator key"></label>
+    <button id="enterModerator" class="primary join-action">Open moderator controls</button>
     <p id="modError" class="muted" aria-live="polite"></p>
   </section>
 </main>
+<script src="config.js"></script>
 <script>
 (function(){
-  const KEY='GoBears';
-  document.getElementById('enterModerator').addEventListener('click',()=>{
-    const key=document.getElementById('modKey').value;
-    const group=document.getElementById('modGroup').value;
-    if(key!==KEY){document.getElementById('modError').textContent='Incorrect moderator key.';return;}
-    location.href=`./?role=facilitator&group=${encodeURIComponent(group)}&key=${encodeURIComponent(key)}`;
-  });
+ let group='';
+ const cards=[...document.querySelectorAll('.group-card')];
+ cards.forEach(b=>b.onclick=()=>{group=b.dataset.group;cards.forEach(x=>x.classList.toggle('selected',x===b));});
+ document.getElementById('enterModerator').onclick=()=>{
+   const key=document.getElementById('modKey').value;
+   if(!group){document.getElementById('modError').textContent='Select your assigned group.';return;}
+   if(key!==window.SPARK_CONFIG.MODERATOR_KEY){document.getElementById('modError').textContent='Incorrect moderator key.';return;}
+   location.href=`./?role=moderator&group=${encodeURIComponent(group)}&key=${encodeURIComponent(key)}`;
+ };
 })();
 </script>
 </body>
