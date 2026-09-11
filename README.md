@@ -1,6 +1,6 @@
-# SPARK Workshop 1 Web App v1.2
+# SPARK Workshop 1 Web App
 
-Production rebuild of the SPARK Workshop 1 data-center adaptive-reasoning activity.
+Production web app for the SPARK Workshop 1 data-center adaptive-reasoning activity.
 
 ## Current workshop structure
 
@@ -11,90 +11,81 @@ Five breakout groups:
 - 🐬 Dolphin
 - 🐙 Octopus
 
-Participants enter their **full name** and click the Zoom breakout group to which they were assigned. Moderators control only their assigned group.
+Breakout-room web flow uses **9 phases**. The transfer discussion after Phase 9 occurs in the main Zoom room.
 
-## v1.2 participant flow
+## Live runtime
 
-- Phase 1 begins as soon as the first participant in a group joins. The shared group timer starts immediately.
-- Participants read the starting record and submit their initial response without waiting for a moderator to start the scenario.
-- Phases advance automatically when the completion requirement for that phase is met.
-- If the moderator manually advances while one participant is still finishing an individual-response phase, that participant can finish and submit the older phase, then joins the group on the current phase.
-- Full name, group, internal participant ID, current phase and unsubmitted draft content are retained locally so accidental refresh/close is recoverable.
-- There is no separate waiting page, recorder role, readiness button, or normal participant Back/Next navigation.
+The synchronized workshop runs through a Google Apps Script web app bound to a Google Sheet. Each group has one authoritative phase and one authoritative deadline.
 
-### Automatic phase completion
+- The moderator entering a group starts Phase 1 and its timer.
+- Participant joins do not start or reset the timer.
+- Submitting data never advances the phase.
+- Participants remain on the current phase after submission.
+- Only the moderator's **Next phase** control advances the group.
+- **+1 minute** extends the shared group deadline.
+- Late participants join the current phase with the current time remaining.
 
-1. Phase 1: all joined participants submit their initial response.
-2. Phase 2: group Need-to-Know response is submitted.
-3. Phase 3: two evidence packets and rationale are submitted.
-4. Phase 4: group evidence review is submitted.
-5. Phase 5: all individual preliminary choices + group reasoning are submitted.
-6. Phase 6: all joined participants submit their response to the new information.
-7. Phase 7: Perspective Challenge is submitted.
-8. Phase 8: all individual final choices + final group artifact are submitted.
-9. Phase 9: educator reflection is submitted.
-10. Phase 10: transfer map is submitted; workshop activity is complete.
+## Data storage
 
-Phase 1 includes a short roster-stabilization grace period before automatic advancement so the first participant cannot immediately advance the room before others arrive.
+All five groups are stored in the Google Sheet bound to the Apps Script project. The app automatically creates/uses these tabs:
 
-## v1.2 moderator flow
+- `ParticipantsV2` — participant/moderator name, ID, group and role.
+- `ResponsesV2` — timestamped submitted text/group artifacts and individual written responses.
+- `VotesV2` — individual recommendation choices and confidence values.
+- `EventsV2` — joins, phase starts, moderator actions and other logged events.
+- `GroupDataV2` — the latest shared state and latest group response for each group/phase.
 
-The moderator dashboard is exception-oriented rather than start-oriented. It shows the current phase, group timer, participant/progress status, and concise phase-specific **SAY** and **DO** guidance.
+`ResponsesV2`, `VotesV2`, and `EventsV2` preserve the timestamped activity history. `GroupDataV2` provides the latest current value used by the live interface.
 
-Normal operation requires no button press. The two primary controls are:
-- **Next phase**: manually advance when the group is ready even if one person is still finishing.
-- **+1 minute**: extend the current group timer.
+## Live dashboard
 
-Neutral prompts and private moderator notes remain available in collapsed sections.
+The Apps Script project now includes `Dashboard.html` and a protected dashboard API.
 
-## Core runtime decisions
+After deploying the current Apps Script files, open:
 
-- Five independent group states, phases, prompts and timers.
-- Stage 1 is locked after submission to preserve the independent starting judgment.
-- Same-phase polling updates only small live regions instead of rebuilding active forms.
-- Formal group-result logic uses **consensus** or **strict majority (>50%)**. A plurality is not labeled a majority; otherwise the result is `No majority / unresolved`.
-- Vote distributions remain hidden from participants until all currently joined group members have submitted at that decision point.
-- Perspective Challenge automatically assigns a contrasting option when the group has a consensus/strict-majority recommendation.
-- Evidence packets use a scan-first `Quick read` with additional detail collapsed.
+`<YOUR_APPS_SCRIPT_WEB_APP_URL>?view=dashboard`
 
-## Decision options
+Enter the moderator code once. The dashboard refreshes every five seconds and includes:
 
-1. Proceed under current requirements
-2. Proceed with project-specific conditions
-3. Defer pending specific studies/information
-4. Oppose the project
+- current phase, remaining time, participant count and moderator for all five groups;
+- selected evidence by group and cross-group frequency;
+- Stage 1, 5, 6 and 8 decision trajectories;
+- participant maintain/change counts from initial to final recommendation when available;
+- phase-by-phase submitted text across all groups;
+- automatic cross-group structural signals;
+- direct link to the underlying Google Sheet;
+- Copy Synthesis Packet and Download JSON controls.
 
-The starting record also states the tradeoff: **Delay could reduce risk, but it could also mean losing the project and potential follow-on investment.**
+The dashboard performs a **structured automatic synthesis** of recorded workshop data. It intentionally does not assign qualitative reasoning scores or make semantic judgments about educator responses.
 
 ## Architecture
 
 **GitHub = source/version control and local/review build.  
-Google Apps Script Web App = synchronized live workshop runtime.  
-Google Sheets = live data store.**
+Google Apps Script Web App = synchronized live workshop runtime and dashboard.  
+Google Sheets = authoritative live data store.**
 
-The active browser runtime is `app3.js`. The Apps Script `Index.html` loads the same runtime from GitHub Pages so the live and review UIs stay aligned.
+GitHub Pages is only a local/single-browser review environment unless a shared backend is configured. It is not the multi-device workshop runtime.
 
-The GitHub Pages root is a local single-browser test/review environment when no backend URL is configured. It is **not** the synchronized multi-device workshop runtime by itself.
+## Apps Script deployment
 
-## Live Apps Script deployment
-
-1. Open the Google Sheet that will hold workshop data.
+1. Open the Google Sheet used for the workshop.
 2. Open **Extensions → Apps Script**.
 3. Replace `Code.gs` with `apps-script/Code.gs`.
-4. Replace the HTML files named `Index` and `ScenarioData` with the matching repository files.
+4. Replace/add HTML files named exactly `Index`, `ScenarioData`, and `Dashboard` using the matching repository files.
 5. Save the project.
-6. **Deploy → New deployment → Web app** (or update the existing deployment).
-7. Use the deployed Apps Script web-app URL as the participant URL.
+6. **Deploy → Manage deployments → Edit** the existing web-app deployment, or create a new web-app deployment.
+7. Use the deployed Apps Script URL for the workshop.
+8. Use `<WEB_APP_URL>?view=dashboard` for the live synthesis dashboard.
 
-Moderator URLs use the deployed URL with the assigned animal group and moderator key.
+## Production smoke test
 
-## Production smoke test still required
+Before the workshop, test with a moderator and at least two participants on separate browsers/devices and verify:
 
-After redeploying Apps Script, test with multiple browsers/devices and verify:
-- joining a group immediately starts Phase 1 and one shared timer,
-- all-complete phases advance automatically,
-- `Next phase` and `+1 minute` affect only the moderator's assigned group,
-- a lagging participant can finish an older individual phase after the group advances and then rejoin the current phase,
-- draft recovery survives refresh/close,
-- vote distributions remain hidden until appropriate,
-- five groups remain isolated from one another.
+- moderator entry starts one shared timer;
+- late participant sees the same current phase and remaining time;
+- participant submission does not move the phase;
+- moderator Next phase moves every participant in that group;
+- +1 minute changes the shared deadline for everyone;
+- five groups remain isolated;
+- dashboard reflects submissions, votes and group responses from all five groups;
+- Phase 9 ends the breakout activity and sends participants back to the main Zoom room.
