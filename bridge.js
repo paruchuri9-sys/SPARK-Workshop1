@@ -2,7 +2,8 @@
 (function(){
   const q=new URLSearchParams(location.search);
   const embedded=q.get('embedded')==='1' && window.parent!==window;
-  const backend=(window.SPARK_CONFIG&&window.SPARK_CONFIG.API_URL)||'';
+  const DEFAULT_BACKEND='https://script.google.com/macros/s/AKfycbydRLKhrr2McY3IeZ9T0Pe1lA9a3BNoL7Rz-Hd557_clOwEiwL1kFwcuqCu48tdOA6V8Q/exec';
+  const backend=(window.SPARK_CONFIG&&window.SPARK_CONFIG.API_URL)||DEFAULT_BACKEND;
 
   window.SPARK_APPS_SCRIPT=embedded||!!backend;
 
