@@ -10,63 +10,39 @@
 <body>
 <header class="topbar">
   <div class="brandmark" aria-hidden="true">SPARK</div>
-  <div>
-    <div class="eyebrow">University of Central Arkansas</div>
-    <h1>SPARK Workshop 1</h1>
-  </div>
-  <div class="header-right">
-    <span id="roleBadge" class="badge">Teacher / Player</span>
-    <span id="connectionBadge" class="badge secondary">Preview</span>
-  </div>
+  <div><div class="eyebrow">University of Central Arkansas</div><h1>SPARK Workshop 1</h1></div>
+  <div class="header-right"><span id="roleBadge" class="badge">Teacher / Player</span><span id="connectionBadge" class="badge secondary">Checking connection</span></div>
 </header>
-
 <main class="shell">
   <section id="joinView" class="card join-card">
     <h2>Join the activity</h2>
-    <p class="muted">Enter your participant code and assigned group.</p>
-    <div class="grid two">
-      <label>Participant code
-        <input id="participantCode" autocomplete="off" placeholder="e.g., P12" />
-      </label>
-      <label>Group
-        <select id="groupId"></select>
-      </label>
-    </div>
-    <input id="isRecorder" type="hidden" value="" />
-    <button id="joinBtn" class="primary">Enter workshop</button>
+    <p class="muted">Enter your full name, then select the Zoom breakout room assigned to you.</p>
+    <label>Participant full name<input id="participantName" autocomplete="name" placeholder="First and last name"></label>
+    <label>Your breakout group</label>
+    <div id="groupCards"></div>
+    <button id="joinBtn" class="primary join-action">Enter workshop</button>
+  </section>
+
+  <section id="waitingView" class="card join-card hidden">
+    <div class="waiting-icon">⏳</div>
+    <h2>You're in <span id="waitingGroup"></span></h2>
+    <p>The moderator will start the scenario shortly. This page will update automatically.</p>
   </section>
 
   <section id="workshopView" class="hidden">
     <div class="stagebar card compact">
-      <div>
-        <div class="eyebrow" id="stageKicker">Stage 1 of 10</div>
-        <h2 id="stageTitle">Starting Record</h2>
-      </div>
-      <div class="timerbox" aria-live="polite">
-        <span class="timer-label">Time remaining</span>
-        <span id="timer">--:--</span>
-      </div>
+      <div><div class="eyebrow" id="stageKicker">Phase 1 of 10</div><h2 id="stageTitle">Starting Record</h2></div>
+      <div class="timerbox" aria-live="polite"><span class="timer-label">Time remaining</span><span id="timer">--:--</span></div>
     </div>
     <div id="promptBanner" class="prompt-banner hidden"></div>
     <div id="stageContent"></div>
-    <div class="stage-actions"><span id="saveState" class="muted"></span></div>
+    <div id="participantNav" class="stage-actions"></div>
   </section>
 
   <section id="facilitatorView" class="hidden"></section>
-  <section id="synthesisView" class="hidden"></section>
 </main>
-
 <script src="config.js"></script>
 <script src="scenario-data.js"></script>
-<script src="auth.js"></script>
 <script src="app.js"></script>
-<script src="patch.js"></script>
-<script src="patch2.js"></script>
-<script src="patch3.js"></script>
-<script src="patch4.js"></script>
-<script src="patch5.js"></script>
-<script src="patch6.js"></script>
-<script src="patch7.js"></script>
-<script src="review.js"></script>
 </body>
 </html>
