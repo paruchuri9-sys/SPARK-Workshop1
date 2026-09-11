@@ -1,166 +1,56 @@
-/**
- * SPARK Workshop 1 - Apps Script backend v0.5
- * Group-specific moderator release. No assigned recorder role.
- */
-const SHEETS = ["Config","Participants","Responses","Votes","Events","GroupData"];
-const STAGE_MINUTES = [4,6,5,8,7,5,6,8,18,25];
-const GROUP_IDS = ["1","2","3","4","5","6"];
-const ACCESS_KEY = "GoBears";
+/** SPARK Workshop 1 production backend v1.0 */
+const ACCESS_KEY='GoBears';
+const GROUP_IDS=['Owl','Fox','Raven','Dolphin','Octopus'];
+const STAGE_MINUTES=[4,6,5,8,7,5,6,8,18,25];
+const SHEETS={participants:'ParticipantsV2',responses:'ResponsesV2',votes:'VotesV2',events:'EventsV2',group:'GroupDataV2'};
 
-function setup(){
-  const ss=SpreadsheetApp.getActiveSpreadsheet();
-  SHEETS.forEach(n=>{ if(!ss.getSheetByName(n)) ss.insertSheet(n); });
-  initSheet_(ss.getSheetByName("Config"),["key","value"]);
-  initSheet_(ss.getSheetByName("Participants"),["timestamp","participant","group","recorder"]);
-  initSheet_(ss.getSheetByName("Responses"),["timestamp","group","key","participant","json"]);
-  initSheet_(ss.getSheetByName("Votes"),["timestamp","group","stage","participant","choice","confidence"]);
-  initSheet_(ss.getSheetByName("Events"),["timestamp","group","participant","event","stage","detail"]);
-  initSheet_(ss.getSheetByName("GroupData"),["group","key","json","updated"]);
-  setConfig_("workshopTitle","SPARK Workshop 1");
-  GROUP_IDS.forEach(g=>{
-    upsertGroup_(g,"_prompt","");
-    upsertGroup_(g,"_started",false);
-    upsertGroup_(g,"_stage",1);
-    upsertGroup_(g,"_deadline",null);
-  });
-}
-
-function include(filename){ return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
-
+function include(filename){return HtmlService.createHtmlOutputFromFile(filename).getContent();}
 function doGet(e){
-  const t=HtmlService.createTemplateFromFile("Index");
-  const requested=(e&&e.parameter.role)||"participant";
-  const key=(e&&e.parameter.key)||"";
-  const role=(requested==="participant"||key===ACCESS_KEY)?requested:"participant";
-  t.boot=JSON.stringify({role:role,group:(e&&e.parameter.group)||"1",key:key});
-  return t.evaluate().setTitle("SPARK Workshop 1").addMetaTag("viewport","width=device-width, initial-scale=1");
+  ensureSetup_();
+  const t=HtmlService.createTemplateFromFile('Index');
+  const requested=(e&&e.parameter.role)||'participant',key=(e&&e.parameter.key)||'';
+  const role=(requested==='moderator'&&key===ACCESS_KEY)?'moderator':(requested==='review'?'review':'participant');
+  t.boot=JSON.stringify({role:role,group:(e&&e.parameter.group)||'',key:key});
+  return t.evaluate().setTitle('SPARK Workshop 1').addMetaTag('viewport','width=device-width, initial-scale=1');
 }
+function api(action,payload){ensureSetup_();return handle_({action:action,...(payload||{})});}
 
-function api(action,payload){ return handle_({action:action,...(payload||{})}); }
-
+function ensureSetup_(){
+ const ss=SpreadsheetApp.getActiveSpreadsheet();
+ const defs={};defs[SHEETS.participants]=['timestamp','id','name','group'];defs[SHEETS.responses]=['timestamp','group','key','participant_id','json'];defs[SHEETS.votes]=['timestamp','group','stage','participant_id','name','choice','confidence'];defs[SHEETS.events]=['timestamp','group','participant_id','event','stage','detail'];defs[SHEETS.group]=['group','key','json','updated'];
+ Object.keys(defs).forEach(n=>{let sh=ss.getSheetByName(n);if(!sh)sh=ss.insertSheet(n);if(sh.getLastRow()===0)sh.appendRow(defs[n]);});
+ GROUP_IDS.forEach(g=>{if(readGroupValue_(g,'_stage')===undefined){upsertGroup_(g,'_started',false);upsertGroup_(g,'_stage',1);upsertGroup_(g,'_deadline',null);upsertGroup_(g,'_prompt','');}});
+}
 function handle_(q){
-  const ss=SpreadsheetApp.getActiveSpreadsheet(),a=q.action;
-  if(a==="join"){
-    ss.getSheetByName("Participants").appendRow([new Date(),q.participant,q.group,false]);
-    logEvent_(q.group,q.participant,"join",stateForGroup_(q.group).stage,{});
-    return {ok:true};
-  }
-  if(a==="event"){
-    logEvent_(q.group||"",q.participant||"",q.event||"",q.stage||"",q);
-    return {ok:true};
-  }
-  if(a==="submit"){
-    upsertGroup_(q.group,q.key,q.value);
-    ss.getSheetByName("Responses").appendRow([new Date(),q.group,q.key,q.participant||"",JSON.stringify(q.value)]);
-    return {ok:true};
-  }
-  if(a==="vote"){
-    ss.getSheetByName("Votes").appendRow([new Date(),q.group,q.stage,q.participant,q.choice,q.confidence]);
-    logEvent_(q.group,q.participant,"decision_submit",q.stage,{choice:q.choice,confidence:q.confidence});
-    return {ok:true};
-  }
-  if(a==="selectEvidence"){
-    upsertGroup_(q.group,"selectedEvidence",q.ids);
-    logEvent_(q.group,q.participant||"","evidence_selected",3,{ids:q.ids});
-    return {ok:true};
-  }
-  if(a==="ready") return {ok:true};
-  if(a==="facilitator"){
-    const g=String(q.group||"1"),patch=q.patch||{},gd=readGroupData_()[g]||{};
-    if(Object.prototype.hasOwnProperty.call(patch,"prompt")) upsertGroup_(g,"_prompt",String(patch.prompt||""));
-    if(Object.prototype.hasOwnProperty.call(patch,"started")){
-      upsertGroup_(g,"_started",!!patch.started);
-      if(patch.started){
-        const stage=Number(gd._stage||1),mins=STAGE_MINUTES[stage-1]||5;
-        upsertGroup_(g,"_deadline",Date.now()+mins*60000);
-        logEvent_(g,"","scenario_started",stage,{});
-      }
-    }
-    if(Object.prototype.hasOwnProperty.call(patch,"deadline")) upsertGroup_(g,"_deadline",Number(patch.deadline)||null);
-    if(Object.prototype.hasOwnProperty.call(patch,"stage")){
-      const s=Math.max(1,Math.min(10,Number(patch.stage)||1)),mins=STAGE_MINUTES[s-1]||5;
-      upsertGroup_(g,"_stage",s);
-      upsertGroup_(g,"_started",true);
-      upsertGroup_(g,"_deadline",Date.now()+mins*60000);
-      upsertGroup_(g,"_prompt","");
-      logEvent_(g,"","stage_advanced",s,{});
-    }
-    return {ok:true};
-  }
-  if(a==="state") return {ok:true,state:stateForGroup_(q.group)};
-  if(a==="allState") return {ok:true,data:allState_()};
-  return {ok:false,error:"Unknown action: "+a};
+ const a=q.action,ss=SpreadsheetApp.getActiveSpreadsheet(),g=String(q.group||'');
+ if(a==='join'){if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};upsertParticipant_(q.id,q.name,g);logEvent_(g,q.id,'join',stateForGroup_(g).stage,{name:q.name});return {ok:true};}
+ if(a==='state')return {ok:true,state:stateForGroup_(g)};
+ if(a==='vote'){if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};ss.getSheetByName(SHEETS.votes).appendRow([new Date(),g,q.stage,q.id,q.name||'',q.choice,q.confidence]);logEvent_(g,q.id,'decision_submit',q.stage,{choice:q.choice,confidence:q.confidence});return {ok:true};}
+ if(a==='submit'){if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};upsertGroup_(g,q.key,q.value);ss.getSheetByName(SHEETS.responses).appendRow([new Date(),g,q.key,q.id||'',JSON.stringify(q.value||{})]);return {ok:true};}
+ if(a==='selectEvidence'){if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};upsertGroup_(g,'selectedEvidence',q.ids||[]);logEvent_(g,q.id,'evidence_selected',3,{ids:q.ids||[]});return {ok:true};}
+ if(a==='event'){if(q.key&&q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator key'};logEvent_(g,q.id||'',q.event||'',q.stage||'',q);return {ok:true};}
+ if(a==='moderator'){
+   if(q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator key'};
+   if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+   const patch=q.patch||{};
+   if(Object.prototype.hasOwnProperty.call(patch,'started'))upsertGroup_(g,'_started',!!patch.started);
+   if(Object.prototype.hasOwnProperty.call(patch,'stage')){const s=Math.max(1,Math.min(10,Number(patch.stage)||1));upsertGroup_(g,'_stage',s);upsertGroup_(g,'_started',true);upsertGroup_(g,'_deadline',Date.now()+(STAGE_MINUTES[s-1]||5)*60000);upsertGroup_(g,'_prompt','');logEvent_(g,'','phase_started',s,{});}
+   if(Object.prototype.hasOwnProperty.call(patch,'deadline'))upsertGroup_(g,'_deadline',patch.deadline==null?null:Number(patch.deadline));
+   if(Object.prototype.hasOwnProperty.call(patch,'prompt')){upsertGroup_(g,'_prompt',String(patch.prompt||''));logEvent_(g,'','prompt_changed',stateForGroup_(g).stage,{prompt:String(patch.prompt||'')});}
+   return {ok:true};
+ }
+ if(a==='resetWorkshop'){if(q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator key'};GROUP_IDS.forEach(x=>{upsertGroup_(x,'_started',false);upsertGroup_(x,'_stage',1);upsertGroup_(x,'_deadline',null);upsertGroup_(x,'_prompt','');upsertGroup_(x,'selectedEvidence',[]);});return {ok:true};}
+ return {ok:false,error:'Unknown action: '+a};
 }
-
 function stateForGroup_(g){
-  const all=allState_(),gd=all.groupData[String(g)]||{};
-  return {
-    started:!!gd._started,
-    stage:Number(gd._stage||1),
-    deadline:gd._deadline==null?null:Number(gd._deadline),
-    prompt:gd._prompt||"",
-    recorder:"",
-    selectedEvidence:all.selectedEvidenceByGroup[String(g)]||[],
-    votes:all.votes[String(g)]||{},
-    groupData:gd,
-    participants:(all.participants||[]).filter(p=>String(p.group)===String(g)),
-    ready:[]
-  };
+ const gd=readGroupData_()[g]||{};
+ return {started:!!gd._started,stage:Number(gd._stage||1),deadline:gd._deadline==null?null:Number(gd._deadline),prompt:gd._prompt||'',selectedEvidence:gd.selectedEvidence||[],votes:readVotesForGroup_(g),groupData:stripControl_(gd),participants:readParticipants_().filter(p=>p.group===g)};
 }
-function allState_(){
-  const gd=readGroupData_(),votes=readVotes_(),participants=readParticipants_();
-  const selected={},control={};
-  GROUP_IDS.forEach(g=>{
-    const x=gd[g]||{};
-    selected[g]=x.selectedEvidence||[];
-    control[g]={started:!!x._started,stage:Number(x._stage||1),deadline:x._deadline==null?null:Number(x._deadline)};
-  });
-  return {groupControl:control,selectedEvidenceByGroup:selected,votes,groupData:gd,participants,ready:{}};
-}
-function initSheet_(sh,headers){if(sh.getLastRow()===0)sh.appendRow(headers);}
-function readParticipants_(){
-  const v=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Participants").getDataRange().getValues(),m={};
-  v.slice(1).forEach(r=>{if(r[1])m[String(r[1])]={participant:String(r[1]),group:String(r[2]),recorder:false};});
-  return Object.values(m);
-}
-function readVotes_(){
-  const v=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Votes").getDataRange().getValues(),o={};
-  v.slice(1).forEach(r=>{
-    const g=String(r[1]),s="s"+r[2],p=String(r[3]);
-    o[g]=o[g]||{};o[g][s]=o[g][s]||{};
-    o[g][s][p]={choice:r[4],confidence:Number(r[5]),ts:new Date(r[0]).getTime()};
-  });
-  return o;
-}
-function readGroupData_(){
-  const v=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("GroupData").getDataRange().getValues(),o={};
-  v.slice(1).forEach(r=>{
-    if(!r[0])return;
-    const g=String(r[0]);o[g]=o[g]||{};
-    try{o[g][r[1]]=JSON.parse(r[2]);}catch(e){o[g][r[1]]=r[2];}
-  });
-  return o;
-}
-function upsertGroup_(g,k,val){
-  const sh=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("GroupData"),v=sh.getDataRange().getValues();
-  for(let i=1;i<v.length;i++){
-    if(String(v[i][0])===String(g)&&String(v[i][1])===String(k)){
-      sh.getRange(i+1,3,1,2).setValues([[JSON.stringify(val),new Date()]]);
-      return;
-    }
-  }
-  sh.appendRow([g,k,JSON.stringify(val),new Date()]);
-}
-function getConfig_(){
-  const v=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Config").getDataRange().getValues(),o={};
-  v.slice(1).forEach(r=>{if(r[0])o[r[0]]=r[1];});
-  return o;
-}
-function setConfig_(k,val){
-  const sh=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Config"),v=sh.getDataRange().getValues();
-  for(let i=1;i<v.length;i++)if(v[i][0]===k){sh.getRange(i+1,2).setValue(val);return;}
-  sh.appendRow([k,val]);
-}
-function logEvent_(g,p,event,stage,detail){
-  SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Events").appendRow([new Date(),g||"",p||"",event||"",stage||"",JSON.stringify(detail||{})]);
-}
+function stripControl_(gd){const o={};Object.keys(gd||{}).forEach(k=>{if(!k.startsWith('_'))o[k]=gd[k]});return o;}
+function upsertParticipant_(id,name,g){const sh=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.participants),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++){if(String(v[i][1])===String(id)){sh.getRange(i+1,1,1,4).setValues([[new Date(),id,name,g]]);return;}}sh.appendRow([new Date(),id,name,g]);}
+function readParticipants_(){const v=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.participants).getDataRange().getValues(),m={};v.slice(1).forEach(r=>{if(r[1])m[String(r[1])]={id:String(r[1]),name:String(r[2]||''),group:String(r[3]||'')}});return Object.values(m);}
+function readVotesForGroup_(g){const v=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.votes).getDataRange().getValues(),o={};v.slice(1).forEach(r=>{if(String(r[1])!==g||!r[3])return;const s='s'+r[2],p=String(r[3]);o[s]=o[s]||{};o[s][p]={name:String(r[4]||''),choice:r[5],confidence:Number(r[6]),ts:new Date(r[0]).getTime()};});return o;}
+function readGroupData_(){const v=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.group).getDataRange().getValues(),o={};v.slice(1).forEach(r=>{if(!r[0])return;const g=String(r[0]);o[g]=o[g]||{};try{o[g][r[1]]=JSON.parse(r[2]);}catch(e){o[g][r[1]]=r[2];}});return o;}
+function readGroupValue_(g,k){const gd=readGroupData_();return gd[g]?gd[g][k]:undefined;}
+function upsertGroup_(g,k,val){const sh=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.group),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++){if(String(v[i][0])===String(g)&&String(v[i][1])===String(k)){sh.getRange(i+1,3,1,2).setValues([[JSON.stringify(val),new Date()]]);return;}}sh.appendRow([g,k,JSON.stringify(val),new Date()]);}
+function logEvent_(g,p,event,stage,detail){SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.events).appendRow([new Date(),g||'',p||'',event||'',stage||'',JSON.stringify(detail||{})]);}
