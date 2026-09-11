@@ -16,13 +16,14 @@
 <main class="shell">
   <section id="joinView" class="card join-card">
     <h2>Join the activity</h2>
-    <p class="muted">Enter your full name, then select the Zoom breakout room assigned to you.</p>
-    <label>Participant full name<input id="participantName" autocomplete="name" placeholder="First and last name"></label>
+    <p class="muted">Enter your name, choose your role, then select your assigned Zoom breakout room.</p>
+    <label>Full name<input id="participantName" autocomplete="name" placeholder="First and last name"></label>
+    <label>Role<select id="entryRole"><option value="participant">Participant</option><option value="moderator">Moderator</option></select></label>
+    <div id="moderatorCodeWrap" class="hidden"><label>Moderator code<input id="moderatorCode" type="password" autocomplete="off" placeholder="Enter moderator code"></label></div>
     <label>Your breakout group</label>
     <div id="groupCards"></div>
     <button id="joinBtn" class="primary join-action">Enter workshop</button>
   </section>
-
   <section id="workshopView" class="hidden">
     <div class="stagebar card compact">
       <div><div class="eyebrow" id="stageKicker">Phase 1 of 10</div><h2 id="stageTitle">Starting Record</h2></div>
@@ -30,14 +31,12 @@
     </div>
     <div id="promptBanner" class="prompt-banner hidden"></div>
     <div id="stageContent"></div>
-    <div id="participantNav" class="stage-actions"></div>
   </section>
-
   <section id="waitingView" class="hidden"></section>
   <section id="facilitatorView" class="hidden"></section>
 </main>
 <script src="config.js"></script>
 <script src="scenario-data.js"></script>
-<script src="app3.js"></script>
+<script src="app4.js"></script>
 </body>
 </html>
