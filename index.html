@@ -23,12 +23,6 @@
     <button id="joinBtn" class="primary join-action">Enter workshop</button>
   </section>
 
-  <section id="waitingView" class="card join-card hidden">
-    <div class="waiting-icon">⏳</div>
-    <h2>You're in <span id="waitingGroup"></span></h2>
-    <p>The moderator will start the scenario shortly. This page will update automatically.</p>
-  </section>
-
   <section id="workshopView" class="hidden">
     <div class="stagebar card compact">
       <div><div class="eyebrow" id="stageKicker">Phase 1 of 10</div><h2 id="stageTitle">Starting Record</h2></div>
@@ -39,10 +33,11 @@
     <div id="participantNav" class="stage-actions"></div>
   </section>
 
+  <section id="waitingView" class="hidden"></section>
   <section id="facilitatorView" class="hidden"></section>
 </main>
 <script src="config.js"></script>
 <script src="scenario-data.js"></script>
-<script src="app.js"></script>
+<script src="app2.js"></script>
 </body>
 </html>
