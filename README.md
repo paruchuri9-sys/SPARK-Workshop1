@@ -1,99 +1,101 @@
-# SPARK Workshop 1 Web App v0.3
+# SPARK Workshop 1 Web App v1.0
 
-Interactive UCA-themed web app for the SPARK Workshop 1 data-center adaptive-reasoning scenario.
+Production rebuild of the SPARK Workshop 1 data-center adaptive-reasoning activity.
 
-## What changed from v0.2
+## Current workshop structure
 
-v0.3 incorporates:
-- the core-educator pilot findings,
-- the rebuilt Data Center Scenario v1.1,
-- the SPARK Scenario Design & Quality Framework v1.0,
-- the broader completeness structure learned from prior university/community decision scenarios.
+Five breakout groups:
+- 🦉 Owl
+- 🦊 Fox
+- 🐦‍⬛ Raven
+- 🐬 Dolphin
+- 🐙 Octopus
 
-Major additions:
-- richer starting record with verified/local-scale facts,
-- explicit stakeholder context without assigning stakeholder roles,
-- seven rebuilt evidence packets,
-- source-status/provenance labeling,
-- infrastructure/construction/public-service content,
-- noise, flood/site risk, governance, monitoring and successor/decommissioning questions,
-- final enforceable-condition/monitoring stage,
-- consensus/majority/tie logic based on every participant submitting a choice,
-- facilitator-controlled latent thought prompts,
-- group-specific prompt exposure,
-- evidence-selection and decision-trajectory synthesis.
+Participants enter their **full name** and click the Zoom breakout group to which they were assigned. Moderators enter through the separate moderator page and control only their assigned group.
 
-## UCA theme
-- Purple: `#582C83`
-- Gray: `#7C878E`
-- Purple shadow: `#3b245e`
+## v1.0 runtime decisions
 
-No logo asset is bundled.
+- One canonical participant/moderator runtime (`app.js`). The former patch stack is removed from the active codebase.
+- No recorder role and no readiness button.
+- Moderator explicitly starts the scenario and each subsequent phase.
+- Each group has independent moderator state, phase, prompt and timer.
+- Participants can move at most one phase ahead of the moderator; the evolving-information phase is not exposed early.
+- Stage 1 is locked after submission to preserve the independent starting judgment.
+- Same-phase polling updates only small live regions instead of rebuilding the form, preventing typed responses from being erased.
+- Formal group-result logic uses **consensus** or **strict majority (>50%)**. A plurality is not labeled a majority; otherwise the result is `No majority / unresolved`.
+- Vote distributions remain hidden from participants until all currently joined group members have submitted at that decision point.
+- Perspective Challenge automatically assigns a contrasting option when the group has a consensus/strict-majority recommendation.
+- Evidence packets use a scan-first `Quick read` with additional detail collapsed.
 
-## Recommended runtime architecture
+## Decision options
 
-**GitHub = source/version control.  
-Google Apps Script Web App = live workshop runtime.  
-Google Sheets = data store.**
+1. Proceed under current requirements
+2. Proceed with project-specific conditions
+3. Defer pending specific studies/information
+4. Oppose the project
 
-The repository root is a static demo/prototype. It works in local/demo mode with browser `localStorage`.
+The starting record also states the tradeoff: **Delay could reduce risk, but it could also mean losing the project and potential follow-on investment.**
 
-For the live synchronized workshop, deploy the `apps-script/` version from a Google Sheet-bound Apps Script project. The Apps Script version is self-contained and does not depend on a CDN at runtime.
+## Architecture
 
-## Apps Script deployment
+**GitHub = source/version control and local/review build.  
+Google Apps Script Web App = synchronized live workshop runtime.  
+Google Sheets = live data store.**
 
-1. Create/open a Google Sheet for workshop data.
-2. Extensions → Apps Script.
+The GitHub Pages root works as a local single-browser test/review environment when no backend URL is configured. It is **not** the synchronized multi-device workshop runtime by itself.
+
+The `apps-script/` source contains the live backend. `Index.html` loads the canonical `app.js` and `styles.css` from this GitHub Pages project so the live and review UIs use the same runtime rather than separate patch copies.
+
+## Live Apps Script deployment
+
+1. Create/open the Google Sheet that will hold workshop data.
+2. Open **Extensions → Apps Script**.
 3. Replace `Code.gs` with `apps-script/Code.gs`.
-4. Add HTML files named exactly:
-   - `Index`
-   - `Styles`
-   - `App`
-   - `ScenarioData`
-   - `AppCore`
-5. Paste the matching repository files from `apps-script/`.
-6. Run `setup()` once and authorize.
-7. Deploy → New deployment → Web app.
-8. Execute as: **Me**.
-9. Choose access appropriate to the participants and UCA/IRB requirements.
+4. Add HTML files named exactly `Index` and `ScenarioData`, using the matching repository files.
+5. Save the project. Setup is automatic on first request; the backend creates new V2 sheets for participants, responses, votes, events and group data.
+6. **Deploy → New deployment → Web app**.
+7. Execute as **Me** and choose access consistent with the workshop/IRB plan.
+8. Use the deployed Apps Script web-app URL as the participant URL.
 
-Participant URL:
-`<WEB_APP_URL>`
+Moderator URLs can be generated from the deployed URL as:
+`<WEB_APP_URL>?role=moderator&group=Owl&key=<MODERATOR_KEY>`
 
-Facilitator Group 1:
-`<WEB_APP_URL>?role=facilitator&group=1`
-
-Synthesis:
-`<WEB_APP_URL>?role=synthesis`
+Use the corresponding animal name for the other four groups.
 
 ## Data captured
 
-The Google Sheet backend stores:
-- participant/group/recorder join state
-- individual choices at stages 1, 5, 6 and 8
+- participant internal ID, full name and group
+- individual choices at phases 1, 5, 6 and 8
 - confidence values
 - group artifacts
-- evidence packet selections
-- facilitator prompt exposure
-- readiness
-- stage transitions
-- facilitator notes
+- evidence packet selection
+- moderator prompt exposure and notes
+- group-specific phase transitions and timing
 
-Derived after the fact:
-- consensus / majority / tie
-- decision trajectories
-- confidence trajectories
-- convergence/divergence
-- evidence-choice patterns
-- support/prompt dependence
+The backend keeps raw vote history while the current state uses the latest submission for each participant/stage.
+
+## Structural verification completed in the v1.0 rebuild
+
+Automated logic/runtime checks were run for:
+- strict-majority vs. plurality/tie behavior
+- group-specific moderator-state isolation
+- Stage 1 lock-after-submit
+- removal of recorder/ready content from all 10 stage templates
+- component-only same-stage polling (no full participant-form rebuild unless the released phase changes)
+
+GitHub Pages deployment also completed successfully after the canonical rebuild.
+
+## Still required before workshop use
+
+A true production smoke test must be run **after the Apps Script project is updated and redeployed**, because the GitHub repository cannot itself publish a Google Apps Script deployment. Test with at least 5 simultaneous devices/browsers and verify:
+- one moderator per animal group
+- each moderator advances only their own group
+- participant names appear on the correct moderator dashboard
+- typed responses survive multiple polling cycles
+- all participants see the same selected evidence and phase releases
+- vote distributions appear only after all joined members submit
+- mobile layout and accessibility are acceptable
 
 ## Scenario design docs
 - `docs/SCENARIO_v1.1.md`
 - `docs/SCENARIO_FRAMEWORK_v1.0.md`
-
-## Before live use
-- Test with at least 5 simultaneous devices.
-- Test participant, recorder, facilitator and synthesis views.
-- Confirm participant-code handling matches the approved IRB/data plan.
-- Check evidence wording one final time with Debbie/Freeman.
-- Keep synthesis hidden from breakout groups until the scenario is complete.
