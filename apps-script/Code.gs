@@ -1,4 +1,4 @@
-/** SPARK Workshop 1 production backend v1.2: live-run hardened */
+/** SPARK Workshop 1 production backend v1.3: moderator-controlled phases */
 const ACCESS_KEY='GoBears';
 const GROUP_IDS=['Owl','Fox','Raven','Dolphin','Octopus'];
 const STAGE_MINUTES=[4,6,5,8,7,5,6,8,18,25];
@@ -36,7 +36,7 @@ function handle_(q){
    const role=String(q.role||'participant');
    if(role==='moderator'&&q.key!==ACCESS_KEY)return {ok:false,error:'Incorrect moderator code'};
    upsertParticipant_(q.id,q.name,g,role);
-   if(role==='participant'&&!readGroupValue_(g,'_started'))startGroup_(g);
+   if(role==='moderator'&&!readGroupValue_(g,'_started'))startGroup_(g,'moderator_join');
    logEvent_(g,q.id,'join',Number(readGroupValue_(g,'_stage')||1),{name:q.name,role:role});
    return {ok:true};
  }
@@ -92,19 +92,20 @@ function handle_(q){
  }
  return {ok:false,error:'Unknown action: '+a};
 }
-function startGroup_(g){
+function startGroup_(g,reason){
  upsertGroup_(g,'_started',true);
- upsertGroup_(g,'_stage',1);
- upsertGroup_(g,'_deadline',Date.now()+STAGE_MINUTES[0]*60000);
+ upsertGroup_(g,'_stage',Number(readGroupValue_(g,'_stage')||1));
+ const s=Number(readGroupValue_(g,'_stage')||1);
+ upsertGroup_(g,'_deadline',Date.now()+(STAGE_MINUTES[s-1]||5)*60000);
  upsertGroup_(g,'_prompt','');
- logEvent_(g,'','phase_started',1,{reason:'first_participant_join'});
+ logEvent_(g,'','phase_started',s,{reason:reason||'moderator_join'});
 }
 function setStage_(g,s,reason){
  upsertGroup_(g,'_started',true);
  upsertGroup_(g,'_stage',s);
  upsertGroup_(g,'_deadline',Date.now()+(STAGE_MINUTES[s-1]||5)*60000);
  upsertGroup_(g,'_prompt','');
- logEvent_(g,'','phase_started',s,{reason:reason||'advance'});
+ logEvent_(g,'','phase_started',s,{reason:reason||'moderator_next'});
 }
 function stateForGroup_(g){
  const gd=readGroupData_()[g]||{},people=readParticipants_().filter(p=>p.group===g);
