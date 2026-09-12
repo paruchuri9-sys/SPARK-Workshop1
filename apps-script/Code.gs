@@ -128,7 +128,7 @@ function handle_(q){
     if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
     if(!readGroupValue_(g,'_started'))return {ok:false,error:'Start Phase 1 first.'};
     const p=q.patch||{};
-    if(Object.prototype.hasOwnProperty.call(p,'stage'))setStage_(g,Math.max(1,Math.min(9,Number(p.stage)||1));
+    if(Object.prototype.hasOwnProperty.call(p,'stage'))setStage_(g,Math.max(1,Math.min(9,Number(p.stage)||1)));
     if(Object.prototype.hasOwnProperty.call(p,'deadline'))upsertGroup_(g,'_deadline',p.deadline==null?null:Number(p.deadline));
     if(Object.prototype.hasOwnProperty.call(p,'prompt'))upsertGroup_(g,'_prompt',String(p.prompt||''));
     invalidateGroupCache_(g);
