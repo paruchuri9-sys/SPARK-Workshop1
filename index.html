@@ -27,6 +27,14 @@
 
   <section id="workshopView" class="hidden">
     <div style="margin-bottom:10px"><button id="changeSessionBtn" type="button" class="secondary-btn">← Change name / role / group</button></div>
+    <div id="participantEmergencyControls" class="card compact hidden" style="margin-bottom:10px;border:2px solid #582C83">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <strong style="margin-right:auto">Workshop controls</strong>
+        <button id="participantStartBtn" class="primary">Start Phase 1</button>
+        <button id="participantNextBtn" class="primary">Next phase →</button>
+      </div>
+      <p class="muted" style="margin:.5rem 0 0">Use only when your group is ready. One participant should click for the group.</p>
+    </div>
     <div class="stagebar card compact">
       <div><div class="eyebrow" id="stageKicker">Phase 1 of 9</div><h2 id="stageTitle">Starting Record</h2></div>
       <div class="timerbox" aria-live="polite"><span class="timer-label">Time remaining</span><span id="timer">--:--</span></div>
@@ -44,5 +52,56 @@
 <script src="workshop.js?v=4"></script>
 <script src="phase9-review.js?v=1"></script>
 <script src="moderator-note-reminders.js?v=1"></script>
+<script>
+(function(){
+  const KEY='GoBears';
+  const SESSION_KEY='spark_live_session_v3';
+  const q=s=>document.querySelector(s);
+  function session(){try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null')||{};}catch(e){return {};}}
+  function currentStage(){
+    const m=(q('#stageKicker')?.textContent||'').match(/Phase\s+(\d+)/i);
+    return m?Number(m[1]):1;
+  }
+  function call(action,payload){
+    return new Promise((resolve,reject)=>{
+      try{
+        google.script.run.withSuccessHandler(r=>resolve(r)).withFailureHandler(e=>reject(e)).api(action,payload);
+      }catch(e){reject(e);}
+    });
+  }
+  function refreshControls(){
+    const s=session(), box=q('#participantEmergencyControls');
+    if(!box)return;
+    const inWorkshop=!q('#workshopView')?.classList.contains('hidden');
+    const isParticipant=s.role==='participant';
+    box.classList.toggle('hidden',!(inWorkshop&&isParticipant));
+    const started=(q('#stageKicker')?.textContent||'').match(/Phase\s+\d+/i);
+    if(q('#participantStartBtn'))q('#participantStartBtn').classList.toggle('hidden',!!started);
+    if(q('#participantNextBtn'))q('#participantNextBtn').classList.toggle('hidden',!started||currentStage()>=9);
+  }
+  async function start(){
+    const s=session(); if(!s.group)return;
+    const b=q('#participantStartBtn'); if(b){b.disabled=true;b.textContent='Starting…';}
+    try{
+      const r=await call('startGroup',{group:s.group,id:s.id||'',key:KEY});
+      if(!r||r.ok===false)throw new Error((r&&r.error)||'Could not start');
+      location.reload();
+    }catch(e){alert((e&&e.message)||String(e));if(b){b.disabled=false;b.textContent='Start Phase 1';}}
+  }
+  async function next(){
+    const s=session(); if(!s.group)return;
+    const st=currentStage(); if(st>=9)return;
+    const b=q('#participantNextBtn'); if(b){b.disabled=true;b.textContent='Moving…';}
+    try{
+      const r=await call('moderator',{group:s.group,id:s.id||'',key:KEY,patch:{stage:st+1}});
+      if(!r||r.ok===false)throw new Error((r&&r.error)||'Could not advance');
+      location.reload();
+    }catch(e){alert((e&&e.message)||String(e));if(b){b.disabled=false;b.textContent='Next phase →';}}
+  }
+  document.addEventListener('click',function(e){if(e.target?.id==='participantStartBtn')start();if(e.target?.id==='participantNextBtn')next();});
+  setInterval(refreshControls,1000);
+  window.addEventListener('load',refreshControls);
+})();
+</script>
 </body>
 </html>
