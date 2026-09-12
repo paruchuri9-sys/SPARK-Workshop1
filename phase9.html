@@ -1,32 +1,26 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SPARK Workshop 1 · Phase 9 Reflection</title>
-  <style>
-    :root{font-family:Arial,Helvetica,sans-serif;color:#241f2b;background:#f6f5f8}
-    body{margin:0;padding:24px}
-    main{max-width:900px;margin:0 auto;background:#fff;border-radius:16px;padding:28px;box-shadow:0 8px 28px rgba(0,0,0,.08)}
-    .eyebrow{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#582C83}
-    h1{margin:.35rem 0 1rem;font-size:34px}
-    p,li{font-size:20px;line-height:1.5}
-    ol{padding-left:1.4em}
-    li{margin:1.1rem 0}
-    .note{margin-top:24px;padding:16px 18px;background:#f3eef8;border-left:5px solid #582C83;border-radius:8px}
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPARK Workshop 1 · Phase 9 Reflection</title>
+<style>
+:root{font-family:Arial,Helvetica,sans-serif;color:#241f2b;background:#f6f5f8}body{margin:0;padding:24px}main{max-width:900px;margin:0 auto;background:#fff;border-radius:16px;padding:28px;box-shadow:0 8px 28px rgba(0,0,0,.08)}.eyebrow{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#582C83}h1{margin:.35rem 0 1rem;font-size:34px}p,label,select,input,textarea,button{font-size:18px;line-height:1.45}label{display:block;font-weight:700;margin:18px 0 6px}input,select,textarea{box-sizing:border-box;width:100%;padding:10px;border:1px solid #aaa;border-radius:8px;background:#fff}textarea{min-height:110px}button{margin-top:22px;padding:12px 20px;border:0;border-radius:8px;background:#582C83;color:#fff;font-weight:700;cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.note{margin-top:20px;padding:14px 16px;background:#f3eef8;border-left:5px solid #582C83;border-radius:8px}.ok{background:#eaf6ed;border-left-color:#287a3d}.err{background:#fdeeee;border-left-color:#b3261e}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style>
 </head>
-<body>
-<main>
-  <div class="eyebrow">SPARK Workshop 1</div>
-  <h1>Phase 9 · Reflection & Co-Design</h1>
-  <p>Step out of the scenario and evaluate the experience from an educator perspective. Discuss the questions together.</p>
-  <ol>
-    <li><strong>What felt authentic or inauthentic?</strong> Refer to a phase or exact wording when useful.</li>
-    <li><strong>Where did consequential reasoning actually occur?</strong> What caused participants to examine evidence, uncertainty, assumptions, or reconsideration?</li>
-    <li><strong>What should we keep, remove, simplify, or change before classroom use?</strong> Include any scaffold that felt leading and what learner reasoning could realistically be observed without excessive grading burden.</li>
-  </ol>
-  <div class="note"><strong>Discussion page only.</strong> This page does not submit or alter workshop data.</div>
+<body><main>
+<div class="eyebrow">SPARK Workshop 1</div><h1>Phase 9 · Reflection & Co-Design</h1>
+<p>Step out of the scenario and evaluate the experience from an educator perspective. Submit your own response below.</p>
+<div class="grid"><div><label for="name">Your name</label><input id="name"></div><div><label for="group">Breakout room</label><select id="group"><option value="">Choose room</option><option>Owl</option><option>Fox</option><option>Raven</option><option>Dolphin</option><option>Octopus</option></select></div></div>
+<label for="q1">1. What felt authentic or inauthentic?</label><textarea id="q1" placeholder="Refer to a phase or exact wording when useful."></textarea>
+<label for="q2">2. Where did consequential reasoning actually occur?</label><textarea id="q2" placeholder="What caused participants to examine evidence, uncertainty, assumptions, or reconsideration?"></textarea>
+<label for="q3">3. What should we keep, remove, simplify, or change before classroom use?</label><textarea id="q3" placeholder="Include any scaffold that felt leading and what learner reasoning could realistically be observed without excessive grading burden."></textarea>
+<button id="submit">Submit Phase 9 response</button><div id="status" class="note" style="display:none"></div>
 </main>
-</body>
-</html>
+<script src="bridge.js?v=5"></script>
+<script>
+(function(){
+ const $=id=>document.getElementById(id); const id=(crypto.randomUUID?crypto.randomUUID():'p9_'+Date.now());
+ function api(action,payload){return new Promise((resolve,reject)=>{google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)))).api(action,payload);});}
+ $('submit').onclick=async function(){const b=this,name=$('name').value.trim(),group=$('group').value,status=$('status');if(!name||!group){alert('Enter your name and choose your breakout room.');return;}b.disabled=true;b.textContent='Submitting…';status.style.display='none';try{let r=await api('join',{id,name,group,role:'participant'});if(!r||r.ok===false)throw new Error((r&&r.error)||'Could not connect.');r=await api('submit',{group,id,key:'phase9_'+id,value:{name,group,authenticity:$('q1').value,reasoningMoments:$('q2').value,changes:$('q3').value,source:'standalone-phase9'},once:false});if(!r||r.ok===false)throw new Error((r&&r.error)||'Submission failed.');status.className='note ok';status.textContent='Response submitted successfully.';status.style.display='block';b.textContent='Submitted';}catch(e){status.className='note err';status.textContent='Could not submit: '+e.message;status.style.display='block';b.disabled=false;b.textContent='Submit Phase 9 response';}};
+})();
+</script></body></html>
