@@ -1,6 +1,6 @@
 // Bridge between the GitHub-hosted UI and the Apps Script backend.
-// Requests are serialized because the Apps Script shell/iframe relay can
-// occasionally lose a request sent immediately after a successful write.
+// Requests are serialized to avoid postMessage races, but each transport
+// request has its own watchdog so one lost reply cannot freeze the queue.
 (function(){
   'use strict';
   const q=new URLSearchParams(location.search);
@@ -8,6 +8,7 @@
   const DEFAULT_BACKEND='https://script.google.com/macros/s/AKfycbydRLKhrr2McY3IeZ9T0Pe1lA9a3BNoL7Rz-Hd557_clOwEiwL1kFwcuqCu48tdOA6V8Q/exec';
   const backend=(window.SPARK_CONFIG&&window.SPARK_CONFIG.API_URL)||DEFAULT_BACKEND;
   const GH_ORIGIN=location.origin;
+  const TRANSPORT_TIMEOUT_MS=12000;
 
   window.SPARK_APPS_SCRIPT=embedded||!!backend;
 
@@ -18,6 +19,7 @@
   let relayReady=false;
   let fallbackReadyTimer=null;
   let activeId=null;
+  let activeWatchdog=null;
   let pumpTimer=null;
 
   function Runner(success,failure){
@@ -28,7 +30,7 @@
   Runner.prototype.withFailureHandler=function(fn){return new Runner(this.success,fn)};
   Runner.prototype.api=function(action,payload){
     const id='spark_'+Date.now()+'_'+(++seq)+'_'+Math.random().toString(36).slice(2,8);
-    pending.set(id,{success:this.success,failure:this.failure});
+    pending.set(id,{success:this.success,failure:this.failure,action:action});
     outbound.push({type:'spark-api',id,action,payload:payload||{}});
     pump();
   };
@@ -38,8 +40,26 @@
     return !!(backend&&relayReady&&relay&&relay.contentWindow);
   }
 
+  function clearActive(){
+    if(activeWatchdog){clearTimeout(activeWatchdog);activeWatchdog=null;}
+    activeId=null;
+  }
+
   function send(msg){
     activeId=msg.id;
+    activeWatchdog=setTimeout(function(){
+      if(activeId!==msg.id)return;
+      const p=pending.get(msg.id);
+      pending.delete(msg.id);
+      clearActive();
+      try{
+        if(p&&p.failure)p.failure(new Error('Backend relay timed out; retrying is safe.'));
+      }finally{
+        // Continue with queued requests rather than deadlocking the page.
+        pump(150);
+      }
+    },TRANSPORT_TIMEOUT_MS);
+
     if(embedded){
       window.parent.postMessage(msg,'*');
     }else{
@@ -60,13 +80,13 @@
     const p=pending.get(id);
     if(!p)return false;
     pending.delete(id);
-    if(activeId===id)activeId=null;
+    if(activeId===id)clearActive();
     try{
       if(ok){if(p.success)p.success(result);}
       else if(p.failure)p.failure(new Error(error||'Apps Script request failed'));
     }finally{
-      // Small gap is intentional. It prevents the next postMessage from
-      // racing the shell immediately after google.script.run completes.
+      // Small gap prevents the next postMessage from racing the shell
+      // immediately after google.script.run completes.
       pump(150);
     }
     return true;
