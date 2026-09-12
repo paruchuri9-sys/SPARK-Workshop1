@@ -1,11 +1,11 @@
-/** SPARK Workshop 1 backend v2.5: Apps Script shell + resettable live group state */
+/** SPARK Workshop 1 backend v2.6: explicit moderator start + resettable live group state */
 const ACCESS_KEY=['Go','Bears'].join('');
 const GROUP_IDS=['Owl','Fox','Raven','Dolphin','Octopus'];
 const STAGE_MINUTES=[4,6,5,8,7,5,6,8,10];
 const GH_ORIGIN='https://paruchuri9-sys.github.io';
 const GH_BASE=GH_ORIGIN+'/SPARK-Workshop1/';
 const SHEETS={participants:'ParticipantsV2',responses:'ResponsesV2',votes:'VotesV2',events:'EventsV2',group:'GroupDataV2'};
-const SETUP_CACHE_KEY='spark_setup_v25';
+const SETUP_CACHE_KEY='spark_setup_v26';
 const TIME_ZONE='America/Chicago';
 
 function doGet(e){
@@ -68,9 +68,6 @@ function handle_(q){
     const role=String(q.role||'participant');
     if(role==='moderator'&&q.key!==ACCESS_KEY)return {ok:false,error:'Incorrect moderator code'};
     upsertParticipant_(q.id,q.name,g,role);
-    const started=!!readGroupValue_(g,'_started'),stage=Number(readGroupValue_(g,'_stage')||1),deadline=Number(readGroupValue_(g,'_deadline')||0);
-    if(role==='moderator'&&!started)startGroup_(g);
-    else if(role==='moderator'&&stage===1&&deadline<Date.now())restartStageOneTimer_(g);
     logEvent_(g,q.id,'join',Number(readGroupValue_(g,'_stage')||1),{name:q.name,role:role});
     invalidateGroupCache_(g);
     return {ok:true};
@@ -79,8 +76,17 @@ function handle_(q){
     if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
     return {ok:true,state:stateForGroup_(g)};
   }
+  if(a==='startGroup'){
+    if(q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator code'};
+    if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+    if(!!readGroupValue_(g,'_started'))return {ok:true,alreadyStarted:true};
+    startGroup_(g,q.id||'');
+    invalidateGroupCache_(g);
+    return {ok:true};
+  }
   if(a==='vote'){
     if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+    if(!readGroupValue_(g,'_started'))return {ok:false,error:'This group has not started yet.'};
     ss.getSheetByName(SHEETS.votes).appendRow([new Date(),g,q.stage,q.id,q.name||'',q.choice,q.confidence]);
     if(q.responseKey){
       upsertGroup_(g,q.responseKey,q.responseValue||{});
@@ -92,6 +98,7 @@ function handle_(q){
   }
   if(a==='submit'){
     if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+    if(!readGroupValue_(g,'_started'))return {ok:false,error:'This group has not started yet.'};
     if(q.once&&readGroupValue_(g,q.key)!==undefined)return {ok:false,error:'A group response has already been submitted.'};
     upsertGroup_(g,q.key,q.value);
     ss.getSheetByName(SHEETS.responses).appendRow([new Date(),g,q.key,q.id||'',JSON.stringify(q.value||{})]);
@@ -100,6 +107,7 @@ function handle_(q){
   }
   if(a==='selectEvidence'){
     if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+    if(!readGroupValue_(g,'_started'))return {ok:false,error:'This group has not started yet.'};
     if(q.once&&readGroupValue_(g,'stage3')!==undefined)return {ok:false,error:'A group evidence choice has already been submitted.'};
     upsertGroup_(g,'selectedEvidence',q.ids||[]);
     if(q.value){
@@ -118,8 +126,9 @@ function handle_(q){
   if(a==='moderator'){
     if(q.key!==ACCESS_KEY)return {ok:false,error:'Invalid moderator code'};
     if(!GROUP_IDS.includes(g))return {ok:false,error:'Invalid group'};
+    if(!readGroupValue_(g,'_started'))return {ok:false,error:'Start Phase 1 first.'};
     const p=q.patch||{};
-    if(Object.prototype.hasOwnProperty.call(p,'stage'))setStage_(g,Math.max(1,Math.min(9,Number(p.stage)||1)));
+    if(Object.prototype.hasOwnProperty.call(p,'stage'))setStage_(g,Math.max(1,Math.min(9,Number(p.stage)||1));
     if(Object.prototype.hasOwnProperty.call(p,'deadline'))upsertGroup_(g,'_deadline',p.deadline==null?null:Number(p.deadline));
     if(Object.prototype.hasOwnProperty.call(p,'prompt'))upsertGroup_(g,'_prompt',String(p.prompt||''));
     invalidateGroupCache_(g);
@@ -139,8 +148,13 @@ function handle_(q){
   return {ok:false,error:'Unknown action: '+a};
 }
 
-function startGroup_(g){upsertGroup_(g,'_started',true);upsertGroup_(g,'_stage',1);upsertGroup_(g,'_deadline',Date.now()+STAGE_MINUTES[0]*60000);upsertGroup_(g,'_prompt','');logEvent_(g,'','phase_started',1,{reason:'moderator_join'});}
-function restartStageOneTimer_(g){upsertGroup_(g,'_started',true);upsertGroup_(g,'_stage',1);upsertGroup_(g,'_deadline',Date.now()+STAGE_MINUTES[0]*60000);upsertGroup_(g,'_prompt','');logEvent_(g,'','phase_timer_restarted',1,{reason:'expired_on_moderator_join'});}
+function startGroup_(g,moderatorId){
+  upsertGroup_(g,'_started',true);
+  upsertGroup_(g,'_stage',1);
+  upsertGroup_(g,'_deadline',Date.now()+STAGE_MINUTES[0]*60000);
+  upsertGroup_(g,'_prompt','');
+  logEvent_(g,moderatorId||'','phase_started',1,{reason:'moderator_start'});
+}
 function setStage_(g,s){upsertGroup_(g,'_started',true);upsertGroup_(g,'_stage',s);upsertGroup_(g,'_deadline',Date.now()+(STAGE_MINUTES[s-1]||5)*60000);upsertGroup_(g,'_prompt','');logEvent_(g,'','phase_started',s,{reason:'moderator_next'});}
 
 function resetGroup_(g){
@@ -161,14 +175,14 @@ function clearGroupStateRows_(g){
 }
 
 function stateForGroup_(g){
-  const cache=CacheService.getScriptCache(),key='spark_state_v25_'+g,hit=cache.get(key);
+  const cache=CacheService.getScriptCache(),key='spark_state_v26_'+g,hit=cache.get(key);
   if(hit){try{const x=JSON.parse(hit);x.serverNow=Date.now();return x;}catch(e){}}
   const gd=readGroupData_()[g]||{},resetAt=Number(gd._resetAt||0),p=readParticipants_().filter(x=>x.group===g&&x.ts>=resetAt);
   const state={serverNow:Date.now(),started:!!gd._started,stage:Math.max(1,Math.min(9,Number(gd._stage||1))),deadline:gd._deadline==null?null:Number(gd._deadline),prompt:gd._prompt||'',selectedEvidence:gd.selectedEvidence||[],votes:readVotesForGroup_(g,resetAt),groupData:stripControl_(gd),participants:p.filter(x=>x.role!=='moderator'),moderators:p.filter(x=>x.role==='moderator')};
   cache.put(key,JSON.stringify(state),3);
   return state;
 }
-function invalidateGroupCache_(g){CacheService.getScriptCache().remove('spark_state_v25_'+g);}
+function invalidateGroupCache_(g){CacheService.getScriptCache().remove('spark_state_v26_'+g);}
 
 function dashboardData_(){
   const ss=SpreadsheetApp.getActiveSpreadsheet(),people=readParticipants_(),gd=readGroupData_(),groups={};
