@@ -1,11 +1,11 @@
-/** SPARK Workshop 1 backend v2.3: Apps Script shell + optimized Google Sheets store */
+/** SPARK Workshop 1 backend v2.4: Apps Script shell + optimized Google Sheets store */
 const ACCESS_KEY=['Go','Bears'].join('');
 const GROUP_IDS=['Owl','Fox','Raven','Dolphin','Octopus'];
-const STAGE_MINUTES=[4,6,5,8,7,5,6,8,18];
+const STAGE_MINUTES=[4,6,5,8,7,5,6,8,12];
 const GH_ORIGIN='https://paruchuri9-sys.github.io';
 const GH_BASE=GH_ORIGIN+'/SPARK-Workshop1/';
 const SHEETS={participants:'ParticipantsV2',responses:'ResponsesV2',votes:'VotesV2',events:'EventsV2',group:'GroupDataV2'};
-const SETUP_CACHE_KEY='spark_setup_v23';
+const SETUP_CACHE_KEY='spark_setup_v24';
 const TIME_ZONE='America/Chicago';
 
 function doGet(e){
@@ -138,14 +138,14 @@ function restartStageOneTimer_(g){upsertGroup_(g,'_started',true);upsertGroup_(g
 function setStage_(g,s){upsertGroup_(g,'_started',true);upsertGroup_(g,'_stage',s);upsertGroup_(g,'_deadline',Date.now()+(STAGE_MINUTES[s-1]||5)*60000);upsertGroup_(g,'_prompt','');logEvent_(g,'','phase_started',s,{reason:'moderator_next'});}
 
 function stateForGroup_(g){
-  const cache=CacheService.getScriptCache(),key='spark_state_v23_'+g,hit=cache.get(key);
+  const cache=CacheService.getScriptCache(),key='spark_state_v24_'+g,hit=cache.get(key);
   if(hit){try{const x=JSON.parse(hit);x.serverNow=Date.now();return x;}catch(e){}}
   const gd=readGroupData_()[g]||{},p=readParticipants_().filter(x=>x.group===g);
   const state={serverNow:Date.now(),started:!!gd._started,stage:Math.max(1,Math.min(9,Number(gd._stage||1))),deadline:gd._deadline==null?null:Number(gd._deadline),prompt:gd._prompt||'',selectedEvidence:gd.selectedEvidence||[],votes:readVotesForGroup_(g),groupData:stripControl_(gd),participants:p.filter(x=>x.role!=='moderator'),moderators:p.filter(x=>x.role==='moderator')};
   cache.put(key,JSON.stringify(state),3);
   return state;
 }
-function invalidateGroupCache_(g){CacheService.getScriptCache().remove('spark_state_v23_'+g);}
+function invalidateGroupCache_(g){CacheService.getScriptCache().remove('spark_state_v24_'+g);}
 
 function dashboardData_(){const ss=SpreadsheetApp.getActiveSpreadsheet(),people=readParticipants_(),gd=readGroupData_(),votes=readAllVotes_(),groups={};GROUP_IDS.forEach(g=>{const p=people.filter(x=>x.group===g),raw=gd[g]||{};groups[g]={state:{started:!!raw._started,stage:Math.max(1,Math.min(9,Number(raw._stage||1))),deadline:raw._deadline==null?null:Number(raw._deadline)},participants:p.filter(x=>x.role!=='moderator'),moderators:p.filter(x=>x.role==='moderator'),selectedEvidence:raw.selectedEvidence||[],votes:votes[g]||{},groupData:stripControl_(raw)};});return {generatedAt:Date.now(),spreadsheetUrl:ss.getUrl(),groups:groups,responses:readResponses_(),events:readEvents_()};}
 function readResponses_(){const sh=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.responses),v=sh.getDataRange().getValues();return v.slice(1).filter(r=>r[0]).map(r=>{let val={};try{val=JSON.parse(r[4]||'{}')}catch(e){val=r[4]}return {ts:new Date(r[0]).getTime(),group:String(r[1]||''),key:String(r[2]||''),participantId:String(r[3]||''),value:val};});}
