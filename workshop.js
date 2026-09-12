@@ -16,7 +16,7 @@ const STAGES=[
   {id:6,title:'Evolving Information Update',mins:5},
   {id:7,title:'Perspective Challenge',mins:6},
   {id:8,title:'Final Decision, Conditions & Reconsideration',mins:8},
-  {id:9,title:'Reflection & Co-Design',mins:18}
+  {id:9,title:'Reflection & Co-Design',mins:10}
 ];
 const GUIDE={
   1:{say:'Please read the starting record and complete your first response individually before discussing it.',do:'Every participant submits individually. Watch the response count below. Advance when the room is ready.'},
@@ -33,11 +33,11 @@ const GUIDE={
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
 const esc=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
-const SESSION_KEY='spark_live_session_v2';
+const SESSION_KEY='spark_live_session_v3';
 const POLL_MS=C.POLL_MS||5000;
 let session={id:'',name:'',group:'',role:'participant',key:''};
 let state={serverNow:Date.now(),started:false,stage:1,deadline:null,prompt:'',selectedEvidence:[],votes:{},groupData:{},participants:[],moderators:[]};
-let selectedGroup='',pollHandle=null,timerHandle=null,clockOffset=0,renderedStage=0,guideOpen=false;
+let selectedGroup='',pollHandle=null,timerHandle=null,retryHandle=null,clockOffset=0,renderedStage=0,renderedStarted=null,guideOpen=false,stateRequestInFlight=false,stateFailures=0;
 
 function backendAvailable(){return !!(window.google&&google.script&&google.script.run&&typeof google.script.run.withSuccessHandler==='function');}
 function api(action,payload={}){
@@ -63,20 +63,129 @@ function clearError(){const e=$('#joinError');if(e)e.remove();}
 function responseLabel(type){return `<div class="callout"><strong>${type==='individual'?'Individual response':'Group response'}:</strong> ${type==='individual'?'Everyone submits their own response.':'Discuss together. Choose one participant to submit for the group.'}</div>`;}
 
 function renderGroupCards(){const host=$('#groupCards');if(!host)return;host.innerHTML=`<div class="group-cards">${GROUPS.map(g=>`<button type="button" class="group-card${selectedGroup===g?' selected':''}" data-group="${g}"><span class="group-emoji">${ICON[g]}</span><span>${g}</span></button>`).join('')}</div>`;$$('.group-card').forEach(b=>b.onclick=()=>{selectedGroup=b.dataset.group;renderGroupCards();});}
-function showJoin(prefill=true){stopPolling();renderedStage=0;$('#workshopView')?.classList.add('hidden');$('#waitingView')?.classList.add('hidden');$('#facilitatorView')?.classList.add('hidden');$('#joinView')?.classList.remove('hidden');if(prefill&&session.name)$('#participantName').value=session.name;else $('#participantName').value='';$('#entryRole').value='participant';$('#moderatorCodeWrap').classList.add('hidden');$('#moderatorCode').value='';selectedGroup='';renderGroupCards();$('#roleBadge').textContent='Participant';setConnection(backendAvailable()?'Backend ready':'Backend unavailable',backendAvailable());}
+function showJoin(prefill=true){stopPolling();renderedStage=0;renderedStarted=null;$('#workshopView')?.classList.add('hidden');$('#waitingView')?.classList.add('hidden');$('#facilitatorView')?.classList.add('hidden');$('#joinView')?.classList.remove('hidden');if(prefill&&session.name)$('#participantName').value=session.name;else $('#participantName').value='';$('#entryRole').value='participant';$('#moderatorCodeWrap').classList.add('hidden');$('#moderatorCode').value='';selectedGroup='';renderGroupCards();$('#roleBadge').textContent='Participant';setConnection(backendAvailable()?'Backend ready':'Backend unavailable',backendAvailable());}
 
-async function joinWorkshop(){clearError();const name=$('#participantName').value.trim(),role=$('#entryRole').value,key=role==='moderator'?$('#moderatorCode').value.trim():'';if(!name)return showError('Enter your name.');if(!selectedGroup)return showError('Choose your assigned breakout group.');if(role==='moderator'&&!key)return showError('Enter the moderator code.');const btn=$('#joinBtn');btn.disabled=true;btn.textContent='Connecting…';const candidate={id:newId(),name,group:selectedGroup,role,key};try{const r=await api('join',{id:candidate.id,name:candidate.name,group:candidate.group,role:candidate.role,key:candidate.key});if(!r||r.ok===false)throw new Error((r&&r.error)||'Could not join workshop.');session=candidate;saveSession();await enterWorkshop();}catch(e){showError(e.message||String(e));setConnection('Backend error',false);}finally{btn.disabled=false;btn.textContent='Enter workshop';}}
-async function resumeSession(){if(!session.id)return showJoin(false);try{const r=await api('join',{id:session.id,name:session.name,group:session.group,role:session.role,key:session.key});if(!r||r.ok===false)throw new Error((r&&r.error)||'Could not resume.');await enterWorkshop();}catch(e){clearSession();showJoin(false);showError('Could not resume the previous session: '+(e.message||e));}}
-async function enterWorkshop(){$('#joinView').classList.add('hidden');$('#workshopView').classList.remove('hidden');$('#roleBadge').textContent=session.role==='moderator'?`Moderator · ${ICON[session.group]} ${session.group}`:`Participant · ${ICON[session.group]} ${session.group}`;setConnection('Connecting',false);await fetchState(true);startPolling();}
-function startPolling(){stopPolling();pollHandle=setInterval(()=>fetchState(false),POLL_MS);timerHandle=setInterval(updateTimer,250);}
-function stopPolling(){if(pollHandle){clearInterval(pollHandle);pollHandle=null;}if(timerHandle){clearInterval(timerHandle);timerHandle=null;}}
+async function joinWorkshop(){
+  clearError();
+  const name=$('#participantName').value.trim(),role=$('#entryRole').value,key=role==='moderator'?$('#moderatorCode').value.trim():'';
+  if(!name)return showError('Enter your name.');
+  if(!selectedGroup)return showError('Choose your assigned breakout group.');
+  if(role==='moderator'&&!key)return showError('Enter the moderator code.');
+  const btn=$('#joinBtn');btn.disabled=true;btn.textContent='Joining…';
+  const candidate={id:newId(),name,group:selectedGroup,role,key};
+  try{
+    const r=await api('join',{id:candidate.id,name:candidate.name,group:candidate.group,role:candidate.role,key:candidate.key});
+    if(!r||r.ok===false)throw new Error((r&&r.error)||'Could not join workshop.');
+    session=candidate;saveSession();enterWorkshop();
+  }catch(e){showError(e.message||String(e));setConnection('Join failed',false);}
+  finally{btn.disabled=false;btn.textContent='Enter workshop';}
+}
+async function resumeSession(){
+  if(!session.id)return showJoin(false);
+  try{
+    const r=await api('join',{id:session.id,name:session.name,group:session.group,role:session.role,key:session.key});
+    if(!r||r.ok===false)throw new Error((r&&r.error)||'Could not resume.');
+    enterWorkshop();
+  }catch(e){clearSession();showJoin(false);showError('Could not resume the previous session: '+(e.message||e));}
+}
+function enterWorkshop(){
+  $('#joinView').classList.add('hidden');$('#workshopView').classList.remove('hidden');
+  $('#roleBadge').textContent=session.role==='moderator'?`Moderator · ${ICON[session.group]} ${session.group}`:`Participant · ${ICON[session.group]} ${session.group}`;
+  setConnection('Joined · loading group state…',false);
+  renderLoadingState();
+  startPolling();
+  fetchState(true);
+}
+function renderLoadingState(){
+  $('#stageKicker').textContent='Connected';
+  $('#stageTitle').textContent=`${ICON[session.group]} ${session.group} group`;
+  $('#timer').textContent='--:--';
+  $('#stageContent').innerHTML='<section class="card stage-card"><h3>Loading group state…</h3><p class="muted">You are connected. The workshop will appear as soon as the group state is received.</p></section>';
+}
+function startPolling(){
+  stopPolling();
+  pollHandle=setInterval(()=>fetchState(false),POLL_MS);
+  timerHandle=setInterval(updateTimer,250);
+}
+function stopPolling(){
+  if(pollHandle){clearInterval(pollHandle);pollHandle=null;}
+  if(timerHandle){clearInterval(timerHandle);timerHandle=null;}
+  if(retryHandle){clearTimeout(retryHandle);retryHandle=null;}
+  stateRequestInFlight=false;
+}
 
-async function fetchState(forceRender){try{const r=await api('state',{group:session.group,id:session.id});if(!r||r.ok===false)throw new Error((r&&r.error)||'State request failed');const oldStage=state.stage;state=r.state||state;clockOffset=(Number(state.serverNow)||Date.now())-Date.now();setConnection('Live',true);if(forceRender||renderedStage!==state.stage||oldStage!==state.stage)renderStage();else refreshLiveElements();updateTimer();}catch(e){setConnection('Connection problem',false);console.error(e);}}
-function refreshLiveElements(){if(state.stage===2){const el=$('#liveStartingPoints');if(el)el.innerHTML=startingPointsHtml();}const mod=$('#moderatorProgress');if(mod)mod.textContent=`Phase ${state.stage} of 9`;const resp=$('#moderatorResponses');if(resp)resp.innerHTML=moderatorResponseStatusHtml();}
-function updateTimer(){const el=$('#timer');if(!el)return;if(!state.deadline){el.textContent='--:--';return;}const ms=Math.max(0,Number(state.deadline)-(Date.now()+clockOffset)),sec=Math.ceil(ms/1000);el.textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;}
+async function fetchState(forceRender){
+  if(stateRequestInFlight)return;
+  stateRequestInFlight=true;
+  try{
+    const r=await api('state',{group:session.group,id:session.id});
+    if(!r||r.ok===false)throw new Error((r&&r.error)||'State request failed');
+    const oldStage=state.stage,oldStarted=state.started;
+    state=r.state||state;
+    clockOffset=(Number(state.serverNow)||Date.now())-Date.now();
+    stateFailures=0;
+    setConnection('Live',true);
+    if(forceRender||renderedStage!==state.stage||renderedStarted!==state.started||oldStage!==state.stage||oldStarted!==state.started)renderStage();
+    else refreshLiveElements();
+    updateTimer();
+  }catch(e){
+    stateFailures++;
+    setConnection(stateFailures===1?'Joined · retrying group state…':'Retrying connection…',false);
+    console.error(e);
+    if(!retryHandle)retryHandle=setTimeout(()=>{retryHandle=null;fetchState(true);},1500);
+  }finally{stateRequestInFlight=false;}
+}
+function refreshLiveElements(){
+  if(!state.started){const resp=$('#moderatorResponses');if(resp)resp.innerHTML=moderatorResponseStatusHtml();return;}
+  if(state.stage===2){const el=$('#liveStartingPoints');if(el)el.innerHTML=startingPointsHtml();}
+  const mod=$('#moderatorProgress');if(mod)mod.textContent=`Phase ${state.stage} of 9`;
+  const resp=$('#moderatorResponses');if(resp)resp.innerHTML=moderatorResponseStatusHtml();
+}
+function updateTimer(){const el=$('#timer');if(!el)return;if(!state.started||!state.deadline){el.textContent='--:--';return;}const ms=Math.max(0,Number(state.deadline)-(Date.now()+clockOffset)),sec=Math.ceil(ms/1000);el.textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;}
 
-function renderStage(){renderedStage=Math.max(1,Math.min(9,Number(state.stage)||1));const st=STAGES[renderedStage-1];$('#stageKicker').textContent=`Phase ${st.id} of 9`;$('#stageTitle').textContent=st.title;$('#stageContent').innerHTML=stageHtml(st.id);renderModeratorStrip();wireStage();if(session.role==='moderator')disableParticipantInputs();updateTimer();}
-function renderModeratorStrip(){const old=$('#moderatorStrip');if(old)old.remove();if(session.role!=='moderator')return;const host=$('#workshopView'),strip=document.createElement('section');strip.id='moderatorStrip';strip.className='card compact';strip.style.marginBottom='12px';const next=state.stage<9?'<button id="modNext" class="primary">Next phase →</button>':'<span class="badge">Breakout final phase</span>',g=GUIDE[state.stage]||GUIDE[9];strip.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong style="margin-right:auto">Moderator · ${ICON[session.group]} ${session.group}</strong><span id="moderatorProgress" class="badge secondary">Phase ${state.stage} of 9</span><button id="modPlus" class="secondary-btn">+1 min</button>${next}<button id="modGuide" class="secondary-btn">Guide</button></div><div id="moderatorResponses" style="margin-top:10px">${moderatorResponseStatusHtml()}</div><div id="modGuidePanel" class="${guideOpen?'':'hidden'}" style="margin-top:10px"><p><strong>SAY:</strong> ${esc(g.say)}</p><p><strong>DO:</strong> ${esc(g.do)}</p></div>`;host.insertBefore(strip,host.firstChild);$('#modGuide').onclick=()=>{guideOpen=!guideOpen;$('#modGuidePanel').classList.toggle('hidden',!guideOpen);};$('#modPlus').onclick=async()=>{const dl=(Number(state.deadline)||Date.now()+clockOffset)+60000;await moderatorPatch({deadline:dl});};if($('#modNext'))$('#modNext').onclick=async()=>{const b=$('#modNext');b.disabled=true;b.textContent='Moving…';await moderatorPatch({stage:Math.min(9,state.stage+1)});};}
+function renderStage(){
+  renderedStarted=!!state.started;
+  if(!state.started){
+    renderedStage=0;
+    $('#stageKicker').textContent='Waiting to start';
+    $('#stageTitle').textContent=`${ICON[session.group]} ${session.group} group`;
+    $('#timer').textContent='--:--';
+    $('#stageContent').innerHTML=session.role==='moderator'
+      ?'<section class="card stage-card"><h3>Group is ready when you are</h3><p>Participants may join before the activity starts. When the room is ready, use <strong>Start Phase 1</strong> above. The Phase 1 timer will begin then.</p></section>'
+      :'<section class="card stage-card"><h3>Waiting for the moderator</h3><p>You are connected. Phase 1 will appear automatically when your moderator starts the activity.</p></section>';
+    renderModeratorStrip();
+    return;
+  }
+  renderedStage=Math.max(1,Math.min(9,Number(state.stage)||1));
+  const st=STAGES[renderedStage-1];
+  $('#stageKicker').textContent=`Phase ${st.id} of 9`;$('#stageTitle').textContent=st.title;$('#stageContent').innerHTML=stageHtml(st.id);
+  renderModeratorStrip();wireStage();if(session.role==='moderator')disableParticipantInputs();updateTimer();
+}
+function renderModeratorStrip(){
+  const old=$('#moderatorStrip');if(old)old.remove();if(session.role!=='moderator')return;
+  const host=$('#workshopView'),strip=document.createElement('section');strip.id='moderatorStrip';strip.className='card compact';strip.style.marginBottom='12px';
+  if(!state.started){
+    strip.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong style="margin-right:auto">Moderator · ${ICON[session.group]} ${session.group}</strong><span class="badge secondary">Connected · waiting</span><button id="modStart" class="primary">Start Phase 1</button></div><div id="moderatorResponses" style="margin-top:10px">${moderatorResponseStatusHtml()}</div>`;
+    host.insertBefore(strip,host.firstChild);
+    $('#modStart').onclick=startPhaseOne;
+    return;
+  }
+  const next=state.stage<9?'<button id="modNext" class="primary">Next phase →</button>':'<span class="badge">Breakout final phase</span>',g=GUIDE[state.stage]||GUIDE[9];
+  strip.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong style="margin-right:auto">Moderator · ${ICON[session.group]} ${session.group}</strong><span id="moderatorProgress" class="badge secondary">Phase ${state.stage} of 9</span><button id="modPlus" class="secondary-btn">+1 min</button>${next}<button id="modGuide" class="secondary-btn">Guide</button></div><div id="moderatorResponses" style="margin-top:10px">${moderatorResponseStatusHtml()}</div><div id="modGuidePanel" class="${guideOpen?'':'hidden'}" style="margin-top:10px"><p><strong>SAY:</strong> ${esc(g.say)}</p><p><strong>DO:</strong> ${esc(g.do)}</p></div>`;
+  host.insertBefore(strip,host.firstChild);
+  $('#modGuide').onclick=()=>{guideOpen=!guideOpen;$('#modGuidePanel').classList.toggle('hidden',!guideOpen);};
+  $('#modPlus').onclick=async()=>{const dl=(Number(state.deadline)||Date.now()+clockOffset)+60000;await moderatorPatch({deadline:dl});};
+  if($('#modNext'))$('#modNext').onclick=async()=>{const b=$('#modNext');b.disabled=true;b.textContent='Moving…';await moderatorPatch({stage:Math.min(9,state.stage+1)});};
+}
+async function startPhaseOne(){
+  const b=$('#modStart');if(b){b.disabled=true;b.textContent='Starting…';}
+  setConnection('Starting Phase 1…',false);
+  try{
+    const r=await api('startGroup',{group:session.group,id:session.id,key:session.key});
+    if(!r||r.ok===false)throw new Error((r&&r.error)||'Could not start the group.');
+    await fetchState(true);
+  }catch(e){alert(e.message||e);if(b){b.disabled=false;b.textContent='Start Phase 1';}setConnection('Live · start failed',true);}
+}
 async function moderatorPatch(patch){try{const r=await api('moderator',{group:session.group,id:session.id,key:session.key,patch});if(!r||r.ok===false)throw new Error((r&&r.error)||'Moderator action failed');await fetchState(true);}catch(e){alert(e.message||e);}}
 function disableParticipantInputs(){$$('#stageContent input,#stageContent textarea,#stageContent select,#stageContent button').forEach(el=>{el.disabled=true;});}
 
@@ -96,7 +205,13 @@ function selectedEvidenceHtml(){const ids=state.selectedEvidence||[];return ids.
 function submittedCard(stage){const v=state.votes?.[`s${stage}`]?.[session.id];if(!v)return '';return `<section class="card success-card"><h3>Individual response submitted ✓</h3><p><strong>${esc(v.choice)}</strong> · Confidence ${esc(v.confidence)}/100</p><p class="muted">Stay on this phase until the moderator advances the group.</p></section>`;}
 function groupAlready(key){const v=state.groupData?.[key];if(!v)return '';return `<div class="success-card card compact"><strong>Group response submitted ✓</strong>${v.submittedBy?` by ${esc(v.submittedBy)}`:''}</div>`;}
 
-function moderatorResponseStatusHtml(){const stage=Number(state.stage)||1,joined=(state.participants||[]).length;if([1,5,6,8].includes(stage)){const votes=state.votes?.[`s${stage}`]||{},arr=Object.values(votes),r=voteResult(votes);return `<div class="callout"><strong>Individual responses:</strong> ${arr.length} of ${joined||'?'} submitted.${arr.length?` <span class="muted">${arr.map(v=>`${esc(v.name||'Participant')}: ${esc(v.choice)} (${Number(v.confidence)||0})`).join(' · ')}</span>`:''}${stage===5&&arr.length?`<br><strong>Moderator-only group status:</strong> ${esc(r.label)}${r.choice?`: ${esc(r.choice)}`:''}`:''}</div>`;}const key=stage===3?'stage3':`stage${stage}`,v=state.groupData?.[key];if(stage===3&&state.selectedEvidence?.length)return `<div class="callout"><strong>Group response:</strong> submitted${v?.submittedBy?` by ${esc(v.submittedBy)}`:''}. Evidence: ${state.selectedEvidence.map(esc).join(', ')}</div>`;return `<div class="callout"><strong>Group response:</strong> ${v?`submitted${v.submittedBy?` by ${esc(v.submittedBy)}`:''}`:'not submitted yet'}.</div>`;}
+function moderatorResponseStatusHtml(){
+  const joined=(state.participants||[]).length;
+  if(!state.started)return `<div class="callout"><strong>Waiting to start.</strong> ${joined} participant${joined===1?'':'s'} currently connected in this run. Start Phase 1 when the room is ready.</div>`;
+  const stage=Number(state.stage)||1;
+  if([1,5,6,8].includes(stage)){const votes=state.votes?.[`s${stage}`]||{},arr=Object.values(votes),r=voteResult(votes);return `<div class="callout"><strong>Individual responses:</strong> ${arr.length} of ${joined||'?'} submitted.${arr.length?` <span class="muted">${arr.map(v=>`${esc(v.name||'Participant')}: ${esc(v.choice)} (${Number(v.confidence)||0})`).join(' · ')}</span>`:''}${stage===5&&arr.length?`<br><strong>Moderator-only group status:</strong> ${esc(r.label)}${r.choice?`: ${esc(r.choice)}`:''}`:''}</div>`;}
+  const key=stage===3?'stage3':`stage${stage}`,v=state.groupData?.[key];if(stage===3&&state.selectedEvidence?.length)return `<div class="callout"><strong>Group response:</strong> submitted${v?.submittedBy?` by ${esc(v.submittedBy)}`:''}. Evidence: ${state.selectedEvidence.map(esc).join(', ')}</div>`;return `<div class="callout"><strong>Group response:</strong> ${v?`submitted${v.submittedBy?` by ${esc(v.submittedBy)}`:''}`:'not submitted yet'}.</div>`;
+}
 
 function stageHtml(n){
   if(n===1){const own=state.votes?.s1?.[session.id],record=`<section class="card stage-card">${responseLabel('individual')}<div class="callout"><strong>${ICON[session.group]} ${session.group}</strong> · Complete your first response before discussing it.</div><h3>Your role</h3><p>You are part of a Community Advisory Team advising local leaders whether, and under what conditions, the community should support a proposed hyperscale data-center campus in Central Arkansas.</p><div class="instruction">Starting record</div><div class="facts">${(D.startingFacts||[]).map(x=>`<div class="fact">${esc(x)}</div>`).join('')}<div class="fact">Delay could reduce risk, but it could also mean losing the project and potential follow-on investment.</div></div></section>`;if(own)return record+submittedCard(1);return record+`<section class="card stage-card"><h3>Individual first impression</h3>${decisionChoices('s1decision')}${confidence('s1conf')}<label>Two or three factors most important to your recommendation<textarea id="s1factors"></textarea></label><label>Most important thing you still need to know or verify<textarea id="s1unknown"></textarea></label><button class="primary submit-vote" data-stage="1">Submit individual response</button></section>`;}
