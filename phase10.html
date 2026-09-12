@@ -1,34 +1,28 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SPARK Workshop 1 · Phase 10 Transfer</title>
-  <style>
-    :root{font-family:Arial,Helvetica,sans-serif;color:#241f2b;background:#f6f5f8}
-    body{margin:0;padding:24px}
-    main{max-width:900px;margin:0 auto;background:#fff;border-radius:16px;padding:28px;box-shadow:0 8px 28px rgba(0,0,0,.08)}
-    .eyebrow{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#582C83}
-    h1{margin:.35rem 0 1rem;font-size:34px}
-    p,li{font-size:20px;line-height:1.5}
-    ol{padding-left:1.4em}
-    li{margin:1.1rem 0}
-    .note{margin-top:24px;padding:16px 18px;background:#f3eef8;border-left:5px solid #582C83;border-radius:8px}
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPARK Workshop 1 · Phase 10 Transfer</title>
+<style>
+:root{font-family:Arial,Helvetica,sans-serif;color:#241f2b;background:#f6f5f8}body{margin:0;padding:24px}main{max-width:900px;margin:0 auto;background:#fff;border-radius:16px;padding:28px;box-shadow:0 8px 28px rgba(0,0,0,.08)}.eyebrow{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#582C83}h1{margin:.35rem 0 1rem;font-size:34px}p,label,select,input,textarea,button{font-size:18px;line-height:1.45}label{display:block;font-weight:700;margin:18px 0 6px}input,select,textarea{box-sizing:border-box;width:100%;padding:10px;border:1px solid #aaa;border-radius:8px;background:#fff}textarea{min-height:100px}button{margin-top:22px;padding:12px 20px;border:0;border-radius:8px;background:#582C83;color:#fff;font-weight:700;cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.note{margin-top:20px;padding:14px 16px;background:#f3eef8;border-left:5px solid #582C83;border-radius:8px}.ok{background:#eaf6ed;border-left-color:#287a3d}.err{background:#fdeeee;border-left-color:#b3261e}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style>
 </head>
-<body>
-<main>
-  <div class="eyebrow">SPARK Workshop 1</div>
-  <h1>Phase 10 · Transfer to Existing Teaching</h1>
-  <p>Think about something you already teach or already do with students. Do not design another SPARK scenario. Start with an existing lesson, activity, project, lab, career interaction, or other experience.</p>
-  <ol>
-    <li><strong>What are students already doing?</strong></li>
-    <li><strong>Where is the consequential judgment?</strong> Where do students decide, interpret, diagnose, recommend, predict, choose, or conclude something meaningful?</li>
-    <li><strong>What is uncertain?</strong> What is incomplete, ambiguous, competing, or not immediately obvious?</li>
-    <li><strong>What evidence would actually matter?</strong> What information could change or sharpen the judgment?</li>
-    <li><strong>What minimal support could help, and what could you realistically observe?</strong> Add the smallest useful support without doing the reasoning for students, then identify what you could see, hear, or collect.</li>
-  </ol>
-  <div class="note"><strong>Discussion page only.</strong> This page does not submit or alter workshop data.</div>
+<body><main>
+<div class="eyebrow">SPARK Workshop 1</div><h1>Phase 10 · Transfer to Existing Teaching</h1>
+<p>Think about something you already teach or already do with students. Do not design another SPARK scenario. Start with an existing lesson, activity, project, lab, career interaction, or other experience.</p>
+<div class="grid"><div><label for="name">Your name</label><input id="name"></div><div><label for="group">Breakout room</label><select id="group"><option value="">Choose room</option><option>Owl</option><option>Fox</option><option>Raven</option><option>Dolphin</option><option>Octopus</option></select></div></div>
+<label for="q1">1. What are students already doing?</label><textarea id="q1"></textarea>
+<label for="q2">2. Where is the consequential judgment?</label><textarea id="q2" placeholder="Where do students decide, interpret, diagnose, recommend, predict, choose, or conclude something meaningful?"></textarea>
+<label for="q3">3. What is uncertain?</label><textarea id="q3" placeholder="What is incomplete, ambiguous, competing, or not immediately obvious?"></textarea>
+<label for="q4">4. What evidence would actually matter?</label><textarea id="q4" placeholder="What information could change or sharpen the judgment?"></textarea>
+<label for="q5">5. What minimal support could help, and what could you realistically observe?</label><textarea id="q5" placeholder="Add the smallest useful support without doing the reasoning for students, then identify what you could see, hear, or collect."></textarea>
+<button id="submit">Submit Phase 10 response</button><div id="status" class="note" style="display:none"></div>
 </main>
-</body>
-</html>
+<script src="bridge.js?v=5"></script>
+<script>
+(function(){
+ const $=id=>document.getElementById(id); const id=(crypto.randomUUID?crypto.randomUUID():'p10_'+Date.now());
+ function api(action,payload){return new Promise((resolve,reject)=>{google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)))).api(action,payload);});}
+ $('submit').onclick=async function(){const b=this,name=$('name').value.trim(),group=$('group').value,status=$('status');if(!name||!group){alert('Enter your name and choose your breakout room.');return;}b.disabled=true;b.textContent='Submitting…';status.style.display='none';try{let r=await api('join',{id,name,group,role:'participant'});if(!r||r.ok===false)throw new Error((r&&r.error)||'Could not connect.');r=await api('submit',{group,id,key:'phase10_'+id,value:{name,group,existingActivity:$('q1').value,judgment:$('q2').value,uncertainty:$('q3').value,evidence:$('q4').value,minimalSupportAndObservable:$('q5').value,source:'standalone-phase10'},once:false});if(!r||r.ok===false)throw new Error((r&&r.error)||'Submission failed.');status.className='note ok';status.textContent='Response submitted successfully.';status.style.display='block';b.textContent='Submitted';}catch(e){status.className='note err';status.textContent='Could not submit: '+e.message;status.style.display='block';b.disabled=false;b.textContent='Submit Phase 10 response';}};
+})();
+</script></body></html>
