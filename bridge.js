@@ -1,6 +1,8 @@
 // Bridge between the GitHub-hosted UI and the Apps Script backend.
-// Supports both the v2.1 dedicated ?bridge=1 relay and the older v2.0 shell.
+// Requests are serialized because the Apps Script shell/iframe relay can
+// occasionally lose a request sent immediately after a successful write.
 (function(){
+  'use strict';
   const q=new URLSearchParams(location.search);
   const embedded=q.get('embedded')==='1' && window.parent!==window;
   const DEFAULT_BACKEND='https://script.google.com/macros/s/AKfycbydRLKhrr2McY3IeZ9T0Pe1lA9a3BNoL7Rz-Hd557_clOwEiwL1kFwcuqCu48tdOA6V8Q/exec';
@@ -10,11 +12,13 @@
   window.SPARK_APPS_SCRIPT=embedded||!!backend;
 
   const pending=new Map();
-  const queued=[];
+  const outbound=[];
   let seq=0;
   let relay=null;
   let relayReady=false;
   let fallbackReadyTimer=null;
+  let activeId=null;
+  let pumpTimer=null;
 
   function Runner(success,failure){
     this.success=success||null;
@@ -25,38 +29,54 @@
   Runner.prototype.api=function(action,payload){
     const id='spark_'+Date.now()+'_'+(++seq)+'_'+Math.random().toString(36).slice(2,8);
     pending.set(id,{success:this.success,failure:this.failure});
-    const msg={type:'spark-api',id,action,payload:payload||{}};
+    outbound.push({type:'spark-api',id,action,payload:payload||{}});
+    pump();
+  };
+
+  function transportReady(){
+    if(embedded)return true;
+    return !!(backend&&relayReady&&relay&&relay.contentWindow);
+  }
+
+  function send(msg){
+    activeId=msg.id;
     if(embedded){
       window.parent.postMessage(msg,'*');
-      return;
-    }
-    if(!backend){
-      finish(id,false,null,'No Apps Script backend URL configured');
-      return;
-    }
-    if(relayReady&&relay&&relay.contentWindow){
-      relay.contentWindow.postMessage(msg,'*');
     }else{
-      queued.push(msg);
+      relay.contentWindow.postMessage(msg,'*');
     }
-  };
+  }
+
+  function pump(delay){
+    if(pumpTimer){clearTimeout(pumpTimer);pumpTimer=null;}
+    const run=function(){
+      if(activeId||!outbound.length||!transportReady())return;
+      send(outbound.shift());
+    };
+    if(delay)pumpTimer=setTimeout(run,delay);else run();
+  }
 
   function finish(id,ok,result,error){
     const p=pending.get(id);
-    if(!p) return false;
+    if(!p)return false;
     pending.delete(id);
-    if(ok){ if(p.success) p.success(result); }
-    else if(p.failure) p.failure(new Error(error||'Apps Script request failed'));
+    if(activeId===id)activeId=null;
+    try{
+      if(ok){if(p.success)p.success(result);}
+      else if(p.failure)p.failure(new Error(error||'Apps Script request failed'));
+    }finally{
+      // Small gap is intentional. It prevents the next postMessage from
+      // racing the shell immediately after google.script.run completes.
+      pump(150);
+    }
     return true;
   }
 
   function markReady(){
-    if(relayReady) return;
+    if(relayReady)return;
     relayReady=true;
     if(fallbackReadyTimer){clearTimeout(fallbackReadyTimer);fallbackReadyTimer=null;}
-    while(queued.length&&relay&&relay.contentWindow){
-      relay.contentWindow.postMessage(queued.shift(),'*');
-    }
+    pump();
   }
 
   window.google=window.google||{};
@@ -67,12 +87,9 @@
     const d=ev.data||{};
 
     if(embedded){
-      if(ev.source!==window.parent) return;
+      if(ev.source!==window.parent)return;
       if(d.type==='spark-api-result'&&d.id){
-        // Normal embedded request: consume locally. Legacy-shell compatibility:
-        // if this nested GitHub frame did not originate the request, forward
-        // the Apps Script result to the outer GitHub page.
-        if(!finish(d.id,!!d.ok,d.result,d.error) && window.top!==window){
+        if(!finish(d.id,!!d.ok,d.result,d.error)&&window.top!==window){
           window.top.postMessage(d,'*');
         }
       }
@@ -85,9 +102,6 @@
     }
 
     if(d.type==='spark-api-result'&&d.id&&pending.has(d.id)){
-      // v2.1 replies arrive from the relay iframe. With the legacy v2.0
-      // shell, the result is forwarded by its nested GitHub frame, so its
-      // source is different but its origin is this GitHub Pages origin.
       if((relay&&ev.source===relay.contentWindow)||ev.origin===GH_ORIGIN){
         finish(d.id,!!d.ok,d.result,d.error);
       }
@@ -100,13 +114,8 @@
     relay.setAttribute('aria-hidden','true');
     relay.tabIndex=-1;
     relay.style.cssText='position:fixed;width:1px;height:1px;border:0;opacity:0;pointer-events:none;left:-9999px;top:-9999px';
-    // A v2.1 relay announces readiness itself. The older shell does not, so
-    // after its iframe finishes loading give its nested GitHub page a moment
-    // to initialize, then treat it as ready.
     relay.addEventListener('load',function(){
-      if(!relayReady){
-        fallbackReadyTimer=setTimeout(markReady,1200);
-      }
+      if(!relayReady)fallbackReadyTimer=setTimeout(markReady,1200);
     });
     document.documentElement.appendChild(relay);
   }
