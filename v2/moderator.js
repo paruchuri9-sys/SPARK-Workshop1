@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, onValue, get, update, set } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { firebaseConfig, moderatorEmail } from "./firebase-config.js";
 import { SCENARIO } from "./scenario.js";
@@ -14,7 +14,16 @@ const notes=[
   "Do not imply that the new information should cause revision. Ask what changed, what did not, and why.",
   "Focus on reopening conditions: what future evidence would warrant reconsideration, and what would be insufficient by itself?"
 ];
-$('#googleSignIn').addEventListener('click',()=>signInWithPopup(auth,new GoogleAuthProvider()));
+
+$('#emailSignIn').addEventListener('click', async()=>{
+  $('#signInError').textContent='';
+  const email=$('#moderatorEmail').value.trim();
+  const password=$('#moderatorPassword').value;
+  try { await signInWithEmailAndPassword(auth,email,password); }
+  catch(e){ $('#signInError').textContent='Sign-in failed. Check that Email/Password is enabled in Firebase Authentication and that this moderator account exists.'; }
+});
+$('#moderatorPassword').addEventListener('keydown',e=>{if(e.key==='Enter') $('#emailSignIn').click();});
+
 onAuthStateChanged(auth,user=>{ if(!user){$('#authStatus').textContent='Not signed in';$('#controls').hidden=true;return;} $('#authStatus').textContent=user.email; if(user.email?.toLowerCase()!==moderatorEmail.toLowerCase()){ $('#authStatus').textContent=`${user.email} — not authorized`; $('#controls').hidden=true; return;} $('#controls').hidden=false; bindSession(); });
 $('#sessionId').addEventListener('change',()=>bindSession());
 function bindSession(){ sessionId=$('#sessionId').value.replace(/[^a-zA-Z0-9_-]/g,'')||'demo'; const sref=ref(db,`sessions/${sessionId}/state`); onValue(sref,snap=>{const next={currentTab:0,...(snap.val()||{})}; if(next.currentTab>state.currentTab) focusTab=next.currentTab; state=next; if(focusTab>state.currentTab) focusTab=state.currentTab; render();}); onValue(ref(db,`sessions/${sessionId}/presence`),snap=>{$('#presence').textContent=snap.size||Object.keys(snap.val()||{}).length;}); onValue(ref(db,`responses/${sessionId}`),snap=>{$('#responseCount').textContent=snap.size||Object.keys(snap.val()||{}).length;}); }
