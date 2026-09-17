@@ -6,15 +6,15 @@
       "$sessionId": {
         "state": {
           ".read": "auth != null",
-          ".write": "auth != null && auth.token.email == 'vparuchuri@uca.edu'"
+          ".write": "auth != null"
         },
         "published": {
           ".read": "auth != null",
-          ".write": "auth != null && auth.token.email == 'vparuchuri@uca.edu'"
+          ".write": "auth != null"
         },
         "presence": {
+          ".read": "auth != null",
           "$uid": {
-            ".read": "auth != null && auth.token.email == 'vparuchuri@uca.edu'",
             ".write": "auth != null && auth.uid == $uid"
           }
         }
@@ -22,7 +22,7 @@
     },
     "responses": {
       "$sessionId": {
-        ".read": "auth != null && auth.token.email == 'vparuchuri@uca.edu'",
+        ".read": "auth != null",
         "$uid": {
           ".write": "auth != null && auth.uid == $uid"
         }
