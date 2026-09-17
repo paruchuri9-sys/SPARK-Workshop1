@@ -1,0 +1,32 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "sessions": {
+      "$sessionId": {
+        "state": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.token.email == 'YOUR_MODERATOR_EMAIL@uca.edu'"
+        },
+        "published": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.token.email == 'YOUR_MODERATOR_EMAIL@uca.edu'"
+        },
+        "presence": {
+          "$uid": {
+            ".read": "auth != null && auth.token.email == 'YOUR_MODERATOR_EMAIL@uca.edu'",
+            ".write": "auth != null && auth.uid == $uid"
+          }
+        }
+      }
+    },
+    "responses": {
+      "$sessionId": {
+        ".read": "auth != null && auth.token.email == 'YOUR_MODERATOR_EMAIL@uca.edu'",
+        "$uid": {
+          ".write": "auth != null && auth.uid == $uid"
+        }
+      }
+    }
+  }
+}
