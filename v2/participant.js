@@ -4,30 +4,45 @@ import { getDatabase, ref, onValue, set, update, onDisconnect, serverTimestamp }
 import { firebaseConfig } from "./firebase-config.js";
 import { SCENARIO, RECOMMENDATIONS } from "./scenario.js";
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app); const db = getDatabase(app);
-await setPersistence(auth, browserSessionPersistence);
-const cred = await signInAnonymously(auth); const uid = cred.user.uid;
-const params = new URLSearchParams(location.search); const sessionId = (params.get("session") || "demo").replace(/[^a-zA-Z0-9_-]/g, "");
-const stateRef = ref(db, `sessions/${sessionId}/state`);
-const responseBase = `responses/${sessionId}/${uid}`;
-const presenceRef = ref(db, `sessions/${sessionId}/presence/${uid}`);
-await set(presenceRef, { online:true, joinedAt:serverTimestamp() }); onDisconnect(presenceRef).remove();
+const params = new URLSearchParams(location.search);
+const previewMode = ["1","true","yes"].includes((params.get("preview") || "").toLowerCase());
+const sessionId = (params.get("session") || "demo").replace(/[^a-zA-Z0-9_-]/g, "");
 
-let state = { currentTab:0, timerEnd:null, timerPausedRemaining:null, locked:false };
+let db = null, uid = "preview";
+let state = { currentTab: previewMode ? SCENARIO.tabs.length - 1 : 0, timerEnd:null, timerPausedRemaining:null, locked:false };
 let activeTab = 0; let timerInterval; let myResponses = {};
+let stateRef = null, responseBase = null;
+
+if (!previewMode) {
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  db = getDatabase(app);
+  await setPersistence(auth, browserSessionPersistence);
+  const cred = await signInAnonymously(auth);
+  uid = cred.user.uid;
+  stateRef = ref(db, `sessions/${sessionId}/state`);
+  responseBase = `responses/${sessionId}/${uid}`;
+  const presenceRef = ref(db, `sessions/${sessionId}/presence/${uid}`);
+  await set(presenceRef, { online:true, joinedAt:serverTimestamp() });
+  onDisconnect(presenceRef).remove();
+}
 const $ = s => document.querySelector(s);
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
 
-onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; render(); });
-onValue(stateRef, snap => {
-  const nextState = { ...state, ...(snap.val() || {}) };
-  if (nextState.currentTab > state.currentTab) activeTab = nextState.currentTab;
-  if (activeTab > nextState.currentTab) activeTab = nextState.currentTab;
-  state = nextState;
+if (previewMode) {
+  $("#status").textContent = "PREVIEW MODE";
   renderTabs(); render(); startTimer();
-  $("#status").textContent = "Connected";
-}, () => { $("#status").textContent = "Connection interrupted"; });
+} else {
+  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; render(); });
+  onValue(stateRef, snap => {
+    const nextState = { ...state, ...(snap.val() || {}) };
+    if (nextState.currentTab > state.currentTab) activeTab = nextState.currentTab;
+    if (activeTab > nextState.currentTab) activeTab = nextState.currentTab;
+    state = nextState;
+    renderTabs(); render(); startTimer();
+    $("#status").textContent = "Connected";
+  }, () => { $("#status").textContent = "Connection interrupted"; });
+}
 
 function renderTabs(){
   $("#tabs").innerHTML = SCENARIO.tabs.map((t,i)=>`<button class="tab ${i===activeTab?'active':''} ${i>state.currentTab?'locked':''}" data-i="${i}" ${i>state.currentTab?'disabled':''}>${t.label}</button>`).join("");
@@ -36,6 +51,7 @@ function renderTabs(){
 
 function startTimer(){
   clearInterval(timerInterval);
+  if (previewMode) { $("#timer").textContent="PREVIEW"; return; }
   const draw=()=>{
     let ms = state.timerPausedRemaining ?? (state.timerEnd ? state.timerEnd-Date.now() : null);
     if(ms==null){ $("#timer").textContent="--:--"; return; }
@@ -45,6 +61,13 @@ function startTimer(){
 
 async function save(stage, payload){
   const btn=document.querySelector('[data-save]'); if(btn) btn.disabled=true;
+  if (previewMode) {
+    myResponses[stage] = payload;
+    const n=document.querySelector('#saveMsg');
+    if(n){n.textContent='Preview only — not recorded.'; n.className='saved';}
+    if(btn) btn.disabled=false;
+    return;
+  }
   try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()}); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} }
   catch(e){ const n=document.querySelector('#saveMsg'); if(n){n.textContent='Not saved yet. Check connection and try again.';} }
   finally { if(btn) btn.disabled=false; }
@@ -54,7 +77,7 @@ function recOptions(name){ return RECOMMENDATIONS.map(x=>`<label class="choice">
 function cardHeader(t){ return `<div class="card"><h1>${esc(t.title)}</h1><p class="muted">${esc(t.intro||'')}</p>${(t.body||[]).length?`<ul>${t.body.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}</div>`; }
 
 function render(){
- const t=SCENARIO.tabs[activeTab]; if(!t) return; let html=cardHeader(t);
+ const t=SCENARIO.tabs[activeTab]; if(!t) return; let html=(previewMode ? '<div class="notice"><strong>Preview mode:</strong> all stages are unlocked. Responses entered here stay only in this browser and are not recorded.</div>' : '') + cardHeader(t);
  if(t.responseType==='initial') html += `<form class="card" id="form"><h2>Your first impression</h2>${recOptions('rec')}<label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><label>Two or three factors most important to your recommendation</label><textarea id="factors"></textarea><div class="actions"><button class="primary" data-save>Save response</button><span id="saveMsg"></span></div></form>`;
  if(t.responseType==='questions') html += `<form class="card" id="form"><h2>Your three most important unanswered questions</h2>${[1,2,3].map(i=>`<label>Question ${i}</label><textarea id="q${i}"></textarea>`).join('')}<label>Where might useful evidence come from?</label><textarea id="sources"></textarea><div class="actions"><button class="primary" data-save>Save response</button><span id="saveMsg"></span></div></form><div class="card"><h2>What the room wanted to know</h2><div id="publishedSummary" class="muted">The moderator has not published a summary yet.</div></div>`;
  if(t.responseType==='investigation') html += `<form class="card" id="form"><h2>Select two areas</h2>${t.options.map(x=>`<label class="choice"><input type="checkbox" name="area" value="${esc(x)}"> <span>${esc(x)}</span></label>`).join('')}<label>Why did you select them?</label><textarea id="why"></textarea><label>What questions do you hope they will answer?</label><textarea id="hope"></textarea><div class="actions"><button class="primary" data-save>Save selection</button><span id="saveMsg"></span></div></form>`;
@@ -66,7 +89,11 @@ function render(){
  hydrate(t);
  const conf=$("#conf"); if(conf) conf.addEventListener('input',()=>$("#confVal").textContent=conf.value);
  const form=$("#form"); if(form) form.addEventListener('submit',async e=>{e.preventDefault(); if(state.locked){$("#saveMsg").textContent='Responses are currently locked.';return;} const payload=collect(t.responseType); if(payload.error){$("#saveMsg").textContent=payload.error;return;} await save(t.id,payload);});
- if(document.querySelector('#publishedSummary')) onValue(ref(db,`sessions/${sessionId}/published/${t.id}`),snap=>{const el=document.querySelector('#publishedSummary'); if(el) el.innerHTML=snap.exists()?renderPublished(snap.val()):'The moderator has not published a summary yet.';});
+ if(document.querySelector('#publishedSummary')) {
+   const el=document.querySelector('#publishedSummary');
+   if (previewMode) el.textContent='Live room summaries are not shown in preview mode.';
+   else onValue(ref(db,`sessions/${sessionId}/published/${t.id}`),snap=>{if(el) el.innerHTML=snap.exists()?renderPublished(snap.val()):'The moderator has not published a summary yet.';});
+ }
 }
 
 function hydrate(t){
