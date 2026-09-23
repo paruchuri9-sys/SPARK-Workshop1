@@ -81,7 +81,12 @@ function render(){
  if(t.responseType==='initial') html += `<form class="card" id="form"><h2>Your first impression</h2>${recOptions('rec')}<label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><label>Two or three factors most important to your recommendation</label><textarea id="factors"></textarea><div class="actions"><button class="primary" data-save>Save response</button><span id="saveMsg"></span></div></form>`;
  if(t.responseType==='questions') html += `<form class="card" id="form"><h2>Your three most important unanswered questions</h2>${[1,2,3].map(i=>`<label>Question ${i}</label><textarea id="q${i}"></textarea>`).join('')}<label>Where might useful evidence come from?</label><textarea id="sources"></textarea><div class="actions"><button class="primary" data-save>Save response</button><span id="saveMsg"></span></div></form><div class="card"><h2>What the room wanted to know</h2><div id="publishedSummary" class="muted">The moderator has not published a summary yet.</div></div>`;
  if(t.responseType==='investigation') html += `<form class="card" id="form"><h2>Select two areas</h2>${t.options.map(x=>`<label class="choice"><input type="checkbox" name="area" value="${esc(x)}"> <span>${esc(x)}</span></label>`).join('')}<label>Why did you select them?</label><textarea id="why"></textarea><label>What questions do you hope they will answer?</label><textarea id="hope"></textarea><div class="actions"><button class="primary" data-save>Save selection</button><span id="saveMsg"></span></div></form>`;
- if(t.responseType==='evidence-review') html += `<div class="card"><h2>Information packets</h2>${t.packets.map(p=>`<section class="packet"><h3>${esc(p.key)}</h3><p>${esc(p.text)}</p></section>`).join('')}</div><form class="card" id="form"><label>What did you learn? What remains unresolved or became newly uncertain?</label><textarea id="review"></textarea><div class="actions"><button class="primary" data-save>Save notes</button><span id="saveMsg"></span></div></form>`;
+ if(t.responseType==='evidence-review') {
+   const packets = previewMode
+     ? t.packets.map((p,i)=>`<button type="button" class="packet-reveal" data-packet="${i}" aria-expanded="false"><span class="packet-label">${esc(p.key)}</span><span class="packet-hint">Click to reveal</span></button><section class="packet packet-hidden" id="packet-${i}" hidden><p>${esc(p.text)}</p></section>`).join('')
+     : t.packets.map(p=>`<section class="packet"><h3>${esc(p.key)}</h3><p>${esc(p.text)}</p></section>`).join('');
+   html += `<div class="card"><h2>Information packets</h2>${previewMode?'<p class="muted">Open a packet when you are ready to inspect that evidence.</p>':''}${packets}</div><form class="card" id="form"><label>What did you learn? What remains unresolved or became newly uncertain?</label><textarea id="review"></textarea><div class="actions"><button class="primary" data-save>Save notes</button><span id="saveMsg"></span></div></form>`;
+ }
  if(t.responseType==='recommendation') html += `<form class="card" id="form"><h2>Recommendation</h2>${recOptions('rec')}<label>What evidence matters most?</label><textarea id="evidence"></textarea><label>Why does that evidence matter, and what important uncertainty remains?</label><textarea id="reasoning"></textarea><label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><div class="actions"><button class="primary" data-save>Save preliminary recommendation</button><span id="saveMsg"></span></div></form><div class="card"><h2>Room snapshot</h2><div id="publishedSummary" class="muted">The moderator has not published a snapshot yet.</div></div>`;
  if(t.responseType==='update') html += `<form class="card" id="form"><h2>What does this mean for your recommendation?</h2>${recOptions('rec')}<label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><label>Why are you maintaining or changing your recommendation?</label><textarea id="why"></textarea><div class="actions"><button class="primary" data-save>Save update</button><span id="saveMsg"></span></div></form>`;
  if(t.responseType==='final') html += `<form class="card" id="form"><h2>Current recommendation</h2>${recOptions('rec')}<label>What specific future evidence, event, or change in conditions would make you reconsider?</label><textarea id="reopen"></textarea><label>What type of new information would not, by itself, be enough to make you reconsider?</label><textarea id="insufficient"></textarea><div class="actions"><button class="primary" data-save>Save final response</button><span id="saveMsg"></span></div></form>`;
@@ -89,6 +94,15 @@ function render(){
  hydrate(t);
  const conf=$("#conf"); if(conf) conf.addEventListener('input',()=>$("#confVal").textContent=conf.value);
  const form=$("#form"); if(form) form.addEventListener('submit',async e=>{e.preventDefault(); if(state.locked){$("#saveMsg").textContent='Responses are currently locked.';return;} const payload=collect(t.responseType); if(payload.error){$("#saveMsg").textContent=payload.error;return;} await save(t.id,payload);});
+ if(previewMode && t.responseType==='evidence-review'){
+   document.querySelectorAll('.packet-reveal').forEach(btn=>btn.addEventListener('click',()=>{
+     const panel=document.querySelector('#packet-'+btn.dataset.packet);
+     const opening=panel.hasAttribute('hidden');
+     if(opening) panel.removeAttribute('hidden'); else panel.setAttribute('hidden','');
+     btn.setAttribute('aria-expanded', String(opening));
+     const hint=btn.querySelector('.packet-hint'); if(hint) hint.textContent=opening?'Hide information':'Click to reveal';
+   }));
+ }
  if(document.querySelector('#publishedSummary')) {
    const el=document.querySelector('#publishedSummary');
    if (previewMode) el.textContent='Live room summaries are not shown in preview mode.';
