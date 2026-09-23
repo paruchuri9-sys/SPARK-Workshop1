@@ -35,3 +35,10 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .summary div { padding:5px 0; border-bottom:1px solid #eee; }
 .mod-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 @media (max-width:700px){ .mod-grid{grid-template-columns:1fr;} .header-row{align-items:flex-start;} }
+.packet-reveal { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; margin:10px 0 0; padding:14px 16px; border:1px solid var(--border); border-radius:10px; background:#fff; color:var(--text); text-align:left; cursor:pointer; font:inherit; }
+.packet-reveal:hover { background:var(--accent2); }
+.packet-reveal[aria-expanded="true"] { border-bottom-left-radius:0; border-bottom-right-radius:0; background:var(--accent2); }
+.packet-label { font-weight:700; }
+.packet-hint { color:var(--muted); font-size:13px; white-space:nowrap; }
+.packet-hidden { margin:0 0 12px; border:1px solid var(--border); border-top:0; border-left:4px solid #98a2b3; border-radius:0 0 10px 10px; padding:14px 16px; background:#fff; }
+.packet-hidden p { margin:0; }
