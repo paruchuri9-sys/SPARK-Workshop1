@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, signInAnonymously, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, onValue, set, update, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getDatabase, ref, onValue, set, update, remove, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { SCENARIO, RECOMMENDATIONS } from "./scenario.js";
 
@@ -11,6 +11,7 @@ const sessionId = (params.get("session") || "demo").replace(/[^a-zA-Z0-9_-]/g, "
 let db = null, uid = "preview";
 let state = { currentTab: previewMode ? SCENARIO.tabs.length - 1 : 0, timerEnd:null, timerPausedRemaining:null, locked:false };
 let activeTab = 0; let timerInterval; let myResponses = {};
+if (previewMode) { activeTab = 0; myResponses = {}; sessionStorage.removeItem("sparkPreviewTab"); }
 let stateRef = null, responseBase = null;
 
 if (!previewMode) {
@@ -43,6 +44,36 @@ if (previewMode) {
     $("#status").textContent = "Connected";
   }, () => { $("#status").textContent = "Connection interrupted"; });
 }
+
+
+$("#resetParticipant").addEventListener("click", async () => {
+  const ok = window.confirm(previewMode
+    ? "Reset this preview and return to Stage 1?"
+    : "Delete your saved responses for this session and return to Stage 1?");
+  if (!ok) return;
+
+  activeTab = 0;
+  myResponses = {};
+  window.scrollTo({ top: 0, behavior: "instant" });
+
+  if (previewMode) {
+    sessionStorage.removeItem("sparkPreviewTab");
+    renderTabs();
+    render();
+    return;
+  }
+
+  try {
+    await remove(ref(db, responseBase));
+    renderTabs();
+    render();
+    const n = document.querySelector("#status");
+    if (n) n.textContent = "Reset complete";
+    setTimeout(() => { if (n) n.textContent = "Connected"; }, 1200);
+  } catch (e) {
+    alert("Could not reset saved responses. Check the connection and try again.");
+  }
+});
 
 function renderTabs(){
   $("#tabs").innerHTML = SCENARIO.tabs.map((t,i)=>`<button class="tab ${i===activeTab?'active':''} ${i>state.currentTab?'locked':''}" data-i="${i}" ${i>state.currentTab?'disabled':''}>${t.label}</button>`).join("");
