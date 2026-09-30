@@ -1,0 +1,36 @@
+name: Deploy SPARK Alpha 1
+
+on:
+  push:
+    branches:
+      - spark-webapp-alpha1
+    paths:
+      - "spark-webapp-alpha1/**"
+      - ".github/workflows/spark-alpha1-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::949163302310:role/SAIL-GitHub-Deploy
+          aws-region: us-east-1
+
+      - name: Setup SAM
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build
+        run: sam build --template-file spark-webapp-alpha1/deploy/aws/template.yaml
+
+      - name: Deploy
+        run: |
+          sam deploy             --stack-name SPARK-Alpha1-WebApp             --region us-east-1             --resolve-s3             --capabilities CAPABILITY_IAM             --no-confirm-changeset             --no-fail-on-empty-changeset
