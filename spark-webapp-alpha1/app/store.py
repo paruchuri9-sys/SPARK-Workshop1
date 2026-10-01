@@ -41,6 +41,17 @@ class Store:
         else:
             self.local.setdefault(session_id,{}).update(patch)
 
+    def append_session_list(self,session_id:str,key:str,value:Any):
+        cur=self.get_session(session_id)
+        if not cur:
+            return False
+        items=cur.get(key)
+        if not isinstance(items,list):
+            items=[]
+        items.append(value)
+        self.update_session(session_id,{key:items})
+        return True
+
     def get_session(self,session_id:str):
         if self.mode=="aws":
             r=self.ddb.get_item(Key={"pk":"SESSION#"+session_id,"sk":"META"})
@@ -141,6 +152,8 @@ class Store:
             "selection":{"selected_ids":selection.get("selected_ids",[])},
             "developed_output":session.get("developed_output") or {},
             "develop_telemetry":session.get("develop_telemetry") or {},
+            "moment_evaluations":session.get("moment_evaluations") or [],
+            "run_evaluations":session.get("run_evaluations") or [],
             "source_text_included":False,
             "public_alpha_endpoint":True
         }
@@ -191,6 +204,12 @@ class Store:
             "",
             "## Telemetry",
             json.dumps({"discover":safe_session.get("telemetry",{}),"develop":safe_session.get("develop_telemetry",{})},ensure_ascii=False,indent=2),
+            "",
+            "## Moment evaluations",
+            json.dumps(safe_session.get("moment_evaluations",[]),ensure_ascii=False,indent=2),
+            "",
+            "## Run evaluations",
+            json.dumps(safe_session.get("run_evaluations",[]),ensure_ascii=False,indent=2),
             "",
             "## Events",
             json.dumps(events,ensure_ascii=False,indent=2)
