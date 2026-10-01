@@ -14,7 +14,7 @@ _openai_secret_error = ""
 _cached_research_token = None
 DISCOVERY_PROMPT_VERSION = "discover-0.2"
 DESIGN_PROMPT_VERSION = "develop-0.1"
-SCHEMA_VERSION = "spark-alpha1-0.2"
+SCHEMA_VERSION = "spark-alpha1-0.3"
 MAX_REMOTE_BYTES = 10 * 1024 * 1024
 MAX_LESSON_CHARS = 120000
 
@@ -342,6 +342,52 @@ class FeedbackRequest(BaseModel):
     rating: str
     comment: str=""
 
+class MomentEvaluationRequest(BaseModel):
+    moment_id: str
+    evaluator_id: str=""
+    evaluator_role: str=""
+    worthwhile: str=""
+    potential_impact: str=""
+    newness: str=""
+    otherwise_missed: str=""
+    specificity: str=""
+    grounding: str=""
+    reasoning_significance: str=""
+    consequentiality: str=""
+    distinctness: str=""
+    domain_relevance: str=""
+    student_appropriateness: str=""
+    teacher_usability: str=""
+    implementation_burden: str=""
+    additional_class_time: str=""
+    new_materials_needed: str=""
+    clarity: str=""
+    explainability: str=""
+    curricular_fit: str=""
+    disruption: str=""
+    strengthens_existing_vs_adds_new: str=""
+    duplication_risk: str=""
+    would_use: str=""
+    would_modify: str=""
+    modification: str=""
+    rejection_reason: str=""
+    confidence: str=""
+    comment: str=""
+
+class RunEvaluationRequest(BaseModel):
+    evaluator_id: str=""
+    evaluator_role: str=""
+    overall_reaction: str=""
+    at_least_one_worthwhile_new_missed: str=""
+    misunderstood_lesson: str=""
+    false_positives: List[str]=[]
+    missed_opportunities: List[str]=[]
+    overlap_or_redundancy: str=""
+    missing_materials_effect: str=""
+    existing_reasoning_richness: str=""
+    confidence: str=""
+    notes: str=""
+
 HTML="""<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>SPARK Alpha 1</title><style>
 body{font-family:system-ui;margin:0;background:#faf9f6;color:#191919}.wrap{max-width:900px;margin:auto;padding:36px 20px}
@@ -478,6 +524,34 @@ def design(session_id: str, req: DesignRequest):
 @app.post("/api/session/{session_id}/feedback")
 def feedback(session_id: str, req: FeedbackRequest):
     store.event(session_id,"USER_FEEDBACK",req.model_dump())
+    artifact_export=store.export_run_artifacts(session_id)
+    if artifact_export:
+        store.event(session_id,"RESEARCH_ARTIFACT_EXPORTED",artifact_export)
+    return {"ok":True}
+
+@app.post("/api/session/{session_id}/evaluation/moment")
+def evaluate_moment(session_id: str, req: MomentEvaluationRequest):
+    session=store.get_session(session_id)
+    if not session:
+        raise HTTPException(404,"Unknown session")
+    payload=req.model_dump()
+    payload["created_at"]=now()
+    store.append_session_list(session_id,"moment_evaluations",payload)
+    store.event(session_id,"MOMENT_EVALUATION",payload)
+    artifact_export=store.export_run_artifacts(session_id)
+    if artifact_export:
+        store.event(session_id,"RESEARCH_ARTIFACT_EXPORTED",artifact_export)
+    return {"ok":True}
+
+@app.post("/api/session/{session_id}/evaluation/run")
+def evaluate_run(session_id: str, req: RunEvaluationRequest):
+    session=store.get_session(session_id)
+    if not session:
+        raise HTTPException(404,"Unknown session")
+    payload=req.model_dump()
+    payload["created_at"]=now()
+    store.append_session_list(session_id,"run_evaluations",payload)
+    store.event(session_id,"RUN_EVALUATION",payload)
     artifact_export=store.export_run_artifacts(session_id)
     if artifact_export:
         store.event(session_id,"RESEARCH_ARTIFACT_EXPORTED",artifact_export)
