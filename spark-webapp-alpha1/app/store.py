@@ -12,7 +12,8 @@ class Store:
         self.bucket=os.getenv("SPARK_UPLOAD_BUCKET","")
         self.prefix=os.getenv("SPARK_UPLOAD_PREFIX","spark-alpha1").strip("/")
         self.drive_folder_id=os.getenv("GOOGLE_DRIVE_FOLDER_ID","").strip()
-        self.google_secret_id=os.getenv("GOOGLE_SERVICE_ACCOUNT_SECRET_ID","").strip()
+        self.google_wif_audience=os.getenv("GOOGLE_WIF_AUDIENCE","").strip()
+        self.google_service_account=os.getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL","").strip()
         if self.mode=="aws":
             import boto3
             self.ddb=boto3.resource("dynamodb").Table(self.table_name)
@@ -164,15 +165,29 @@ class Store:
 
 
     def _google_credentials(self):
-        if not self.google_secret_id:
+        if not self.google_wif_audience or not self.google_service_account:
             return None
-        import boto3
-        from google.oauth2 import service_account
-        secret=boto3.client("secretsmanager").get_secret_value(SecretId=self.google_secret_id).get("SecretString","")
-        info=json.loads(secret)
-        return service_account.Credentials.from_service_account_info(
-            info,scopes=["https://www.googleapis.com/auth/drive.file"]
+        import google.auth
+        info={
+            "universe_domain":"googleapis.com",
+            "type":"external_account",
+            "audience":self.google_wif_audience,
+            "subject_token_type":"urn:ietf:params:aws:token-type:aws4_request",
+            "token_url":"https://sts.googleapis.com/v1/token",
+            "credential_source":{
+                "environment_id":"aws1",
+                "region_url":"http://169.254.169.254/latest/meta-data/placement/availability-zone",
+                "url":"http://169.254.169.254/latest/meta-data/iam/security-credentials",
+                "regional_cred_verification_url":"https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15"
+            },
+            "service_account_impersonation_url":
+                "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/"
+                +self.google_service_account+":generateAccessToken"
+        }
+        creds,_=google.auth.load_credentials_from_dict(
+            info,scopes=["https://www.googleapis.com/auth/drive"]
         )
+        return creds
 
     def _drive_access_token(self):
         creds=self._google_credentials()
@@ -226,7 +241,7 @@ class Store:
         return r.json()
 
     def mirror_run_to_drive(self,session_id:str,artifact:dict,markdown:str):
-        if not self.drive_folder_id or not self.google_secret_id:
+        if not self.drive_folder_id or not self.google_wif_audience or not self.google_service_account:
             return {"status":"disabled"}
         try:
             token=self._drive_access_token()
