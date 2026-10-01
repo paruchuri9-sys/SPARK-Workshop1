@@ -45,6 +45,17 @@ jobs:
             --region us-east-1 \
             --query 'Stacks[0].StackStatus' \
             --output text 2>/dev/null || true)
+          if [ "$STATUS" = "ROLLBACK_IN_PROGRESS" ]; then
+            echo "Waiting for rollback to finish before cleanup"
+            aws cloudformation wait stack-rollback-complete \
+              --stack-name SPARK-Alpha1-WebApp \
+              --region us-east-1 || true
+            STATUS=$(aws cloudformation describe-stacks \
+              --stack-name SPARK-Alpha1-WebApp \
+              --region us-east-1 \
+              --query 'Stacks[0].StackStatus' \
+              --output text 2>/dev/null || true)
+          fi
           if [ "$STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STATUS" = "ROLLBACK_FAILED" ] || [ "$STATUS" = "DELETE_FAILED" ]; then
             echo "Deleting failed stack in $STATUS state"
             aws cloudformation delete-stack \
