@@ -13,6 +13,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: spark-alpha1-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-24.04
@@ -82,7 +86,6 @@ jobs:
 
       - name: Deploy
         id: deploy
-        continue-on-error: true
         run: |
           sam deploy \
             --stack-name SPARK-Alpha1-WebApp \
@@ -95,7 +98,7 @@ jobs:
             --no-fail-on-empty-changeset
 
       - name: Diagnose SPARK stack
-        if: steps.deploy.outcome == 'failure'
+        if: failure()
         run: |
           aws cloudformation describe-stack-events \
             --stack-name SPARK-Alpha1-WebApp \
