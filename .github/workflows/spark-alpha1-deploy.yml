@@ -25,6 +25,15 @@ jobs:
           role-to-assume: arn:aws:iam::949163302310:role/SAIL-GitHub-Deploy
           aws-region: us-east-1
 
+      - name: Resolve existing deployment bucket
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks             --stack-name SAIL-Alpha2-Telemetry             --region us-east-1             --query "Stacks[0].Outputs[?OutputKey=='TelemetryBucketName'].OutputValue"             --output text)
+          if [ -z "$BUCKET" ] || [ "$BUCKET" = "None" ]; then
+            echo "Existing S3 bucket not found" >&2
+            exit 1
+          fi
+          echo "SPARK_EXISTING_BUCKET=$BUCKET" >> "$GITHUB_ENV"
+
       - name: Setup SAM
         uses: aws-actions/setup-sam@v2
 
@@ -35,13 +44,10 @@ jobs:
         id: deploy
         continue-on-error: true
         run: |
-          sam deploy             --stack-name SPARK-Alpha1-WebApp             --region us-east-1             --resolve-s3             --capabilities CAPABILITY_IAM             --no-confirm-changeset             --no-fail-on-empty-changeset
+          sam deploy             --stack-name SPARK-Alpha1-WebApp             --region us-east-1             --s3-bucket "$SPARK_EXISTING_BUCKET"             --s3-prefix "spark-alpha1/deploy"             --parameter-overrides ExistingUploadBucket="$SPARK_EXISTING_BUCKET"             --capabilities CAPABILITY_IAM             --no-confirm-changeset             --no-fail-on-empty-changeset
 
-      - name: Diagnose SAM managed stack
+      - name: Diagnose SPARK stack
         if: steps.deploy.outcome == 'failure'
         run: |
-          echo "=== aws-sam-cli-managed-default ==="
-          aws cloudformation describe-stack-events             --stack-name aws-sam-cli-managed-default             --region us-east-1             --query 'StackEvents[0:20].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]'             --output table || true
-          echo "=== SPARK-Alpha1-WebApp ==="
-          aws cloudformation describe-stack-events             --stack-name SPARK-Alpha1-WebApp             --region us-east-1             --query 'StackEvents[0:30].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]'             --output table || true
+          aws cloudformation describe-stack-events             --stack-name SPARK-Alpha1-WebApp             --region us-east-1             --query 'StackEvents[0:40].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]'             --output table || true
           exit 1
