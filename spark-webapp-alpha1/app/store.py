@@ -397,9 +397,9 @@ class Store:
             ContentType="text/markdown; charset=utf-8",
             ServerSideEncryption="AES256"
         )
-        # S3 is the canonical Alpha research artifact store.
-        # Drive mirroring is intentionally disabled after proving unnecessary for Alpha.
-        return {"json_key":json_key,"markdown_key":markdown_key,"drive":{"status":"disabled"}}
+        # S3 remains canonical; Drive is a convenience mirror only.
+        drive=self.mirror_run_to_drive(session_id,artifact,markdown)
+        return {"json_key":json_key,"markdown_key":markdown_key,"drive":drive}
 
     def store_upload(self,session_id:str,file_name:str,content:bytes):
         if self.mode=="aws":
