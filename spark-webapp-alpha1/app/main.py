@@ -483,6 +483,16 @@ def feedback(session_id: str, req: FeedbackRequest):
         store.event(session_id,"RESEARCH_ARTIFACT_EXPORTED",artifact_export)
     return {"ok":True}
 
+@app.get("/api/research/latest")
+def research_latest():
+    bundle=store.latest_public_bundle()
+    if not bundle:
+        raise HTTPException(404,"No SPARK runs found.")
+    return JSONResponse(
+        content=bundle,
+        headers={"Cache-Control":"no-store"}
+    )
+
 @app.get("/api/research/sessions")
 def research_sessions(limit: int=50, x_spark_research_token: str=Header("")):
     require_research(x_spark_research_token)
