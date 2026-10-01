@@ -10,6 +10,7 @@ class Store:
         self.s3=None
         self.table_name=os.getenv("SPARK_TABLE","")
         self.bucket=os.getenv("SPARK_UPLOAD_BUCKET","")
+        self.prefix=os.getenv("SPARK_UPLOAD_PREFIX","spark-alpha1").strip("/")
         if self.mode=="aws":
             import boto3
             self.ddb=boto3.resource("dynamodb").Table(self.table_name)
@@ -19,7 +20,7 @@ class Store:
         return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     def health(self):
-        return {"mode":self.mode,"table":self.table_name if self.mode=="aws" else None,"bucket":self.bucket if self.mode=="aws" else None}
+        return {"mode":self.mode,"table":self.table_name if self.mode=="aws" else None,"bucket":self.bucket if self.mode=="aws" else None,"prefix":self.prefix if self.mode=="aws" else None}
 
     def create_session(self,session_id:str,metadata:Dict[str,Any],lesson_text:str):
         item={"session_id":session_id,"metadata":metadata,"lesson_text":lesson_text,"created_at":self._ts()}
@@ -52,7 +53,7 @@ class Store:
 
     def store_upload(self,session_id:str,file_name:str,content:bytes):
         if self.mode=="aws":
-            key="sessions/"+session_id+"/source/"+file_name
+            key=f"{self.prefix}/sessions/{session_id}/source/{file_name}"
             self.s3.put_object(Bucket=self.bucket,Key=key,Body=content,ServerSideEncryption="AES256")
             self.event(session_id,"UPLOAD_STORED",{"bucket":self.bucket,"key":key,"file_name":file_name})
             return key
