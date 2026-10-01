@@ -240,6 +240,47 @@ class Store:
         r.raise_for_status()
         return r.json()
 
+    def test_drive_connection(self):
+        status={
+            "configured":bool(self.drive_folder_id and self.google_wif_audience and self.google_service_account),
+            "folder_id":self.drive_folder_id,
+            "service_account":self.google_service_account,
+            "wif_audience":self.google_wif_audience
+        }
+        if not status["configured"]:
+            status["status"]="disabled"
+            return status
+        try:
+            token=self._drive_access_token()
+            if not token:
+                status["status"]="auth_failed"
+                status["error"]="No access token returned."
+                return status
+            import httpx
+            r=httpx.get(
+                "https://www.googleapis.com/drive/v3/files/"+self.drive_folder_id,
+                headers={"Authorization":"Bearer "+token},
+                params={"fields":"id,name,mimeType,capabilities(canAddChildren)"},
+                timeout=20
+            )
+            status["http_status"]=r.status_code
+            if r.status_code>=400:
+                status["status"]="drive_failed"
+                try:
+                    status["error"]=(r.json().get("error") or {}).get("message") or r.text[:400]
+                except Exception:
+                    status["error"]=r.text[:400]
+                return status
+            info=r.json()
+            status["status"]="ok"
+            status["folder_name"]=info.get("name")
+            status["can_add_children"]=(info.get("capabilities") or {}).get("canAddChildren")
+            return status
+        except Exception as e:
+            status["status"]="error"
+            status["error"]=f"{type(e).__name__}: {str(e)[:500]}"
+            return status
+
     def mirror_run_to_drive(self,session_id:str,artifact:dict,markdown:str):
         if not self.drive_folder_id or not self.google_wif_audience or not self.google_service_account:
             return {"status":"disabled"}
