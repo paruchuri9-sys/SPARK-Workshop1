@@ -1,4 +1,5 @@
-import os, json, uuid, datetime, io
+import os, json, uuid, datetime, io, ipaddress, socket
+from urllib.parse import urlparse, urljoin
 from typing import Any, Dict, List
 import httpx
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -8,6 +9,9 @@ from .store import Store
 
 app = FastAPI(title="SPARK Alpha 1")
 store = Store()
+_cached_openai_key = None
+MAX_REMOTE_BYTES = 10 * 1024 * 1024
+MAX_LESSON_CHARS = 120000
 
 DISCOVERY_INSTRUCTIONS = """You are SPARK's discovery stage. Given an existing lesson/activity, first reconstruct what students already do and what reasoning is already present. Then generate candidate reasoning moments liberally. Criticize each candidate for redundancy, genericness, grounding, lesson evidence, consequentiality, feasibility, time burden, dependencies, and duplication. Surface at most five defensible moments. Zero is valid. Do not redesign the lesson yet. Return JSON only."""
 DESIGN_INSTRUCTIONS = """You are SPARK's develop stage. Use only the educator-selected moments plus the educator's constraints and further input. Create concrete teacher-usable strengthening for those moments while preserving the existing lesson unless change is necessary. Make the adaptation to educator constraints explicit. Return JSON only."""
@@ -15,9 +19,30 @@ DESIGN_INSTRUCTIONS = """You are SPARK's develop stage. Use only the educator-se
 def now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
+def openai_key():
+    global _cached_openai_key
+    env_key=os.getenv("OPENAI_API_KEY", "").strip()
+    if env_key:
+        return env_key
+    if _cached_openai_key:
+        return _cached_openai_key
+    secret_id=os.getenv("OPENAI_SECRET_ID", "").strip()
+    if not secret_id:
+        return ""
+    try:
+        import boto3
+        secret=boto3.client("secretsmanager").get_secret_value(SecretId=secret_id).get("SecretString","").strip()
+        if secret.startswith("{"):
+            parsed=json.loads(secret)
+            secret=(parsed.get("OPENAI_API_KEY") or parsed.get("api_key") or parsed.get("key") or "").strip()
+        _cached_openai_key=secret
+        return secret
+    except Exception:
+        return ""
+
 def cfg():
     return {
-        "key": os.getenv("OPENAI_API_KEY", ""),
+        "key": openai_key(),
         "model": os.getenv("OPENAI_MODEL", "gpt-5.6-sol"),
         "url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     }
@@ -57,6 +82,66 @@ def extract_text(name: str, content: bytes) -> str:
         return "\n".join(p.text for p in Document(io.BytesIO(content)).paragraphs)
     raise HTTPException(400,"Supported: PDF, DOCX, TXT, MD, CSV")
 
+def _validate_public_url(url: str):
+    parsed=urlparse(url)
+    if parsed.scheme not in ("http","https") or not parsed.hostname:
+        raise HTTPException(400,"Lesson URL must be a valid http:// or https:// URL.")
+    host=parsed.hostname.lower()
+    if host in ("localhost","localhost.localdomain") or host.endswith(".local"):
+        raise HTTPException(400,"Private/local URLs are not supported.")
+    try:
+        infos=socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme=="https" else 80), type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise HTTPException(400,"Lesson URL hostname could not be resolved.")
+    for info in infos:
+        ip=ipaddress.ip_address(info[4][0])
+        if not ip.is_global:
+            raise HTTPException(400,"Private, loopback, link-local, and reserved network URLs are not supported.")
+
+def fetch_url_text(source_url: str):
+    current=source_url.strip()
+    headers={"User-Agent":"SPARK-Alpha1/1.0 (+educator lesson analysis)"}
+    with httpx.Client(timeout=httpx.Timeout(20.0, read=40.0), follow_redirects=False, headers=headers) as client:
+        for _ in range(6):
+            _validate_public_url(current)
+            with client.stream("GET",current) as r:
+                if 300 <= r.status_code < 400 and r.headers.get("location"):
+                    current=urljoin(current,r.headers["location"])
+                    continue
+                if r.status_code >= 400:
+                    raise HTTPException(400,f"Could not retrieve lesson URL (HTTP {r.status_code}).")
+                body=bytearray()
+                for chunk in r.iter_bytes():
+                    body.extend(chunk)
+                    if len(body)>MAX_REMOTE_BYTES:
+                        raise HTTPException(400,"Lesson URL content is too large (10 MB maximum).")
+                content=bytes(body)
+                content_type=(r.headers.get("content-type") or "").split(";")[0].lower().strip()
+            break
+        else:
+            raise HTTPException(400,"Lesson URL redirected too many times.")
+
+    path=(urlparse(current).path or "").lower()
+    if content_type=="application/pdf" or path.endswith(".pdf"):
+        text=extract_text("remote.pdf",content)
+    elif content_type in ("application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/msword") or path.endswith(".docx"):
+        text=extract_text("remote.docx",content)
+    elif content_type.startswith("text/html") or path.endswith((".html",".htm")) or not content_type:
+        from bs4 import BeautifulSoup
+        soup=BeautifulSoup(content,"html.parser")
+        for tag in soup(["script","style","noscript","svg"]):
+            tag.decompose()
+        root=soup.find("main") or soup.find("article") or soup.body or soup
+        text=root.get_text("\n",strip=True)
+    elif content_type.startswith("text/"):
+        text=content.decode("utf-8",errors="replace")
+    else:
+        raise HTTPException(400,f"Unsupported lesson URL content type: {content_type or 'unknown'}.")
+    text=text.strip()
+    if not text:
+        raise HTTPException(400,"No readable lesson text was found at that URL.")
+    return text[:MAX_LESSON_CHARS], current, content_type
+
 class DesignRequest(BaseModel):
     selected_ids: List[str]
     constraints: str=""
@@ -80,7 +165,8 @@ pre{white-space:pre-wrap;background:#111;color:#eee;padding:14px;border-radius:1
 <section class='card'><h2>1. Lesson</h2><form id='f'><div class='grid'>
 <label>Lesson name<input name='lesson_name'></label><label>Grade/course<input name='grade_course'></label>
 <label>Duration<input name='duration'></label><label>Objective<input name='objective'></label></div>
-<label>Upload<input type='file' name='file' accept='.pdf,.docx,.txt,.md,.csv'></label>
+<label>Lesson URL<input type='url' name='source_url' placeholder='https://...'></label>
+<label>Or upload<input type='file' name='file' accept='.pdf,.docx,.txt,.md,.csv'></label>
 <label>Or paste lesson<textarea name='pasted_text' rows='9'></textarea></label>
 <label>Anything SPARK should know?<textarea name='educator_input' rows='3'></textarea></label>
 <button>Uncover opportunities</button><p id='s' class='muted'></p></form></section>
@@ -116,24 +202,30 @@ def health():
 async def discover(
     lesson_name: str=Form(""), grade_course: str=Form(""), duration: str=Form(""),
     objective: str=Form(""), educator_input: str=Form(""), pasted_text: str=Form(""),
-    file: UploadFile|None=File(None)
+    source_url: str=Form(""), file: UploadFile|None=File(None)
 ):
     session_id=str(uuid.uuid4())
     file_name=""
     file_bytes=b""
     lesson_text=pasted_text.strip()
+    fetched_url=""
+    fetched_content_type=""
+    if source_url.strip():
+        remote_text,fetched_url,fetched_content_type=fetch_url_text(source_url)
+        lesson_text=(lesson_text+"\n\n"+remote_text).strip()
     if file and file.filename:
         file_name=file.filename
         file_bytes=await file.read()
         extracted=extract_text(file_name,file_bytes)
         lesson_text=(lesson_text+"\n\n"+extracted).strip()
     if not lesson_text:
-        raise HTTPException(400,"Upload or paste a lesson/activity.")
-    metadata={"lesson_name":lesson_name,"grade_course":grade_course,"duration":duration,"objective":objective,"educator_input":educator_input,"file_name":file_name,"created_at":now()}
+        raise HTTPException(400,"Provide a lesson URL, upload a file, or paste a lesson/activity.")
+    lesson_text=lesson_text[:MAX_LESSON_CHARS]
+    metadata={"lesson_name":lesson_name,"grade_course":grade_course,"duration":duration,"objective":objective,"educator_input":educator_input,"file_name":file_name,"source_url":source_url.strip(),"resolved_url":fetched_url,"source_content_type":fetched_content_type,"created_at":now()}
     store.create_session(session_id,metadata,lesson_text)
     if file_bytes:
         store.store_upload(session_id,file_name,file_bytes)
-    store.event(session_id,"INPUT_CAPTURED",{"metadata":metadata,"lesson_text":lesson_text})
+    store.event(session_id,"INPUT_CAPTURED",{"metadata":metadata,"lesson_chars":len(lesson_text),"source_modes":{"url":bool(source_url.strip()),"upload":bool(file_bytes),"pasted":bool(pasted_text.strip())}})
     prompt=json.dumps({"lesson":lesson_text,"context":metadata},ensure_ascii=False)
     discovery=call_model(DISCOVERY_INSTRUCTIONS,prompt)
     store.event(session_id,"ACTIVITY_UNDERSTANDING",discovery.get("activity_map",{}))
