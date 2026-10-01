@@ -437,6 +437,9 @@ async def discover(
     timing={"url_fetch_extract_ms":url_fetch_extract_ms,"file_extract_ms":file_extract_ms,"model_ms":model_meta.get("latency_ms"),"total_ms":total_ms,"input_chars":len(lesson_text),"candidate_count":len(discovery.get("candidates",[])),"surfaced_count":len(discovery.get("surfaced_moments",[]))}
     store.event(session_id,"RUN_TIMING",timing)
     store.update_session(session_id,{"discovery":discovery,"telemetry":{"discover":model_meta,"timing":timing},"prompt_version":DISCOVERY_PROMPT_VERSION,"schema_version":SCHEMA_VERSION})
+    artifact_export=store.export_run_artifacts(session_id)
+    if artifact_export:
+        store.event(session_id,"RESEARCH_ARTIFACT_EXPORTED",artifact_export)
     return {"session_id":session_id,"discovery":discovery,"timing":{"total_ms":total_ms}}
 
 @app.post("/api/session/{session_id}/design")
@@ -454,11 +457,17 @@ def design(session_id: str, req: DesignRequest):
     store.event(session_id,"MODEL_CALL",{"stage":"develop",**model_meta})
     store.event(session_id,"DEVELOPED_OUTPUT",result)
     store.update_session(session_id,{"selection":selection,"developed_output":result,"develop_telemetry":model_meta})
+    artifact_export=store.export_run_artifacts(session_id)
+    if artifact_export:
+        store.event(session_id,"RESEARCH_ARTIFACT_EXPORTED",artifact_export)
     return result
 
 @app.post("/api/session/{session_id}/feedback")
 def feedback(session_id: str, req: FeedbackRequest):
     store.event(session_id,"USER_FEEDBACK",req.model_dump())
+    artifact_export=store.export_run_artifacts(session_id)
+    if artifact_export:
+        store.event(session_id,"RESEARCH_ARTIFACT_EXPORTED",artifact_export)
     return {"ok":True}
 
 @app.get("/api/research/sessions")
