@@ -92,7 +92,7 @@ Use this as the SSOT for the temporary Alpha 1 deployment policy. Do not broaden
         "apigateway:PATCH",
         "apigateway:DELETE"
       ],
-      "Resource": "arn:aws:apigateway:us-east-1::/apis*"
+      "Resource": "arn:aws:apigateway:us-east-1::*"
     }
   ]
 }
