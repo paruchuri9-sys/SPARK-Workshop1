@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: SPARK Discover-Select-Develop prototype
+
+Parameters:
+  ExistingUploadBucket:
+    Type: String
+    Description: Existing S3 bucket used for Alpha 1 uploads/artifacts.
+
 Resources:
   SparkData:
     Type: AWS::DynamoDB::Table
@@ -16,18 +22,7 @@ Resources:
           KeyType: HASH
         - AttributeName: sk
           KeyType: RANGE
-  SparkUploads:
-    Type: AWS::S3::Bucket
-    Properties:
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        IgnorePublicAcls: true
-        BlockPublicPolicy: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+
   SparkFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -40,13 +35,14 @@ Resources:
         Variables:
           SPARK_STORAGE: aws
           SPARK_TABLE: !Ref SparkData
-          SPARK_UPLOAD_BUCKET: !Ref SparkUploads
+          SPARK_UPLOAD_BUCKET: !Ref ExistingUploadBucket
+          SPARK_UPLOAD_PREFIX: spark-alpha1
           OPENAI_MODEL: gpt-5.6-sol
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref SparkData
         - S3CrudPolicy:
-            BucketName: !Ref SparkUploads
+            BucketName: !Ref ExistingUploadBucket
       Events:
         Root:
           Type: HttpApi
@@ -58,10 +54,11 @@ Resources:
           Properties:
             Path: /
             Method: ANY
+
 Outputs:
   AppUrl:
     Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/'
   DataTable:
     Value: !Ref SparkData
   UploadBucket:
-    Value: !Ref SparkUploads
+    Value: !Ref ExistingUploadBucket
