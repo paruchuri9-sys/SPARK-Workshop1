@@ -113,6 +113,38 @@ class Store:
         return {"session":session,"events":self.get_events(session_id)}
 
 
+    def latest_public_bundle(self):
+        sessions=self.list_sessions(1)
+        if not sessions:
+            return None
+        session=sessions[0]
+        metadata=session.get("metadata") or {}
+        safe_metadata={
+            "lesson_name":metadata.get("lesson_name",""),
+            "grade_course":metadata.get("grade_course",""),
+            "duration":metadata.get("duration",""),
+            "objective":metadata.get("objective",""),
+            "source_url":metadata.get("source_url",""),
+            "resolved_url":metadata.get("resolved_url",""),
+            "created_at":metadata.get("created_at","")
+        }
+        selection=session.get("selection") or {}
+        return {
+            "session_id":session.get("session_id"),
+            "created_at":session.get("created_at"),
+            "metadata":safe_metadata,
+            "prompt_version":session.get("prompt_version"),
+            "schema_version":session.get("schema_version"),
+            "discovery":session.get("discovery") or {},
+            "telemetry":session.get("telemetry") or {},
+            "selection":{"selected_ids":selection.get("selected_ids",[])},
+            "developed_output":session.get("developed_output") or {},
+            "develop_telemetry":session.get("develop_telemetry") or {},
+            "source_text_included":False,
+            "public_alpha_endpoint":True
+        }
+
+
     def build_run_artifacts(self,session_id:str):
         session=self.get_session(session_id)
         if not session:
@@ -365,8 +397,9 @@ class Store:
             ContentType="text/markdown; charset=utf-8",
             ServerSideEncryption="AES256"
         )
-        drive=self.mirror_run_to_drive(session_id,artifact,markdown)
-        return {"json_key":json_key,"markdown_key":markdown_key,"drive":drive}
+        # S3 is the canonical Alpha research artifact store.
+        # Drive mirroring is intentionally disabled after proving unnecessary for Alpha.
+        return {"json_key":json_key,"markdown_key":markdown_key,"drive":{"status":"disabled"}}
 
     def store_upload(self,session_id:str,file_name:str,content:bytes):
         if self.mode=="aws":
