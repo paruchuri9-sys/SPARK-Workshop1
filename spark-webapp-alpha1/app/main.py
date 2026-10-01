@@ -35,8 +35,22 @@ def openai_key():
         secret=boto3.client("secretsmanager").get_secret_value(SecretId=secret_id).get("SecretString","").strip()
         if secret.startswith("{"):
             parsed=json.loads(secret)
-            secret=(parsed.get("OPENAI_API_KEY") or parsed.get("api_key") or parsed.get("key") or "").strip()
+            if isinstance(parsed, dict):
+                for name in ("OPENAI_API_KEY","openai_api_key","OpenAIApiKey","OpenAIApiKey2","api_key","apikey","key","value"):
+                    value=parsed.get(name)
+                    if isinstance(value,str) and value.strip():
+                        secret=value.strip()
+                        break
+                else:
+                    values=[v.strip() for v in parsed.values() if isinstance(v,str) and v.strip()]
+                    secret=values[0] if len(values)==1 else ""
+            else:
+                secret=""
+        if not secret:
+            _openai_secret_error="Secret retrieved, but no API key value was found."
+            return ""
         _cached_openai_key=secret
+        _openai_secret_error=""
         return secret
     except Exception as e:
         _openai_secret_error=f"{type(e).__name__}: {str(e)[:300]}"
