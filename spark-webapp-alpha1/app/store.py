@@ -59,22 +59,23 @@ class Store:
     def list_sessions(self,limit:int=50):
         limit=max(1,min(int(limit),200))
         if self.mode=="aws":
+            # DynamoDB Scan has no ordering guarantee. Read all META items first,
+            # then sort by created_at so "latest" is actually the newest session.
             items=[]
             kwargs={"ProjectionExpression":"pk, sk, data_json, created_at, updated_at"}
-            while len(items)<limit:
+            while True:
                 r=self.ddb.scan(**kwargs)
                 for item in r.get("Items",[]):
-                    if item.get("sk")=="META":
-                        try:
-                            data=json.loads(item.get("data_json","{}"))
-                        except Exception:
-                            continue
-                        data.pop("lesson_text",None)
-                        items.append(data)
-                        if len(items)>=limit:
-                            break
+                    if item.get("sk")!="META":
+                        continue
+                    try:
+                        data=json.loads(item.get("data_json","{}"))
+                    except Exception:
+                        continue
+                    data.pop("lesson_text",None)
+                    items.append(data)
                 lek=r.get("LastEvaluatedKey")
-                if not lek or len(items)>=limit:
+                if not lek:
                     break
                 kwargs["ExclusiveStartKey"]=lek
             items.sort(key=lambda x:x.get("created_at",""),reverse=True)
