@@ -401,6 +401,10 @@ def health():
 def health_drive():
     return store.test_drive_connection()
 
+@app.get("/health/drive/write")
+def health_drive_write():
+    return store.test_drive_write()
+
 @app.post("/api/discover")
 async def discover(
     lesson_name: str=Form(""), grade_course: str=Form(""), duration: str=Form(""),
