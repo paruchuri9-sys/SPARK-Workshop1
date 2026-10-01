@@ -50,9 +50,17 @@ jobs:
             aws cloudformation delete-stack \
               --stack-name SPARK-Alpha1-WebApp \
               --region us-east-1
-            aws cloudformation wait stack-delete-complete \
+            if ! aws cloudformation wait stack-delete-complete \
               --stack-name SPARK-Alpha1-WebApp \
-              --region us-east-1
+              --region us-east-1; then
+              echo "Stack deletion failed; showing recent events"
+              aws cloudformation describe-stack-events \
+                --stack-name SPARK-Alpha1-WebApp \
+                --region us-east-1 \
+                --query 'StackEvents[0:25].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]' \
+                --output table || true
+              exit 1
+            fi
           fi
 
       - name: Setup SAM
