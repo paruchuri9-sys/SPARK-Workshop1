@@ -10,6 +10,7 @@ from .store import Store
 app = FastAPI(title="SPARK Alpha 1")
 store = Store()
 _cached_openai_key = None
+_openai_secret_error = ""
 MAX_REMOTE_BYTES = 10 * 1024 * 1024
 MAX_LESSON_CHARS = 120000
 
@@ -20,7 +21,7 @@ def now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 def openai_key():
-    global _cached_openai_key
+    global _cached_openai_key, _openai_secret_error
     env_key=os.getenv("OPENAI_API_KEY", "").strip()
     if env_key:
         return env_key
@@ -37,7 +38,8 @@ def openai_key():
             secret=(parsed.get("OPENAI_API_KEY") or parsed.get("api_key") or parsed.get("key") or "").strip()
         _cached_openai_key=secret
         return secret
-    except Exception:
+    except Exception as e:
+        _openai_secret_error=f"{type(e).__name__}: {str(e)[:300]}"
         return ""
 
 def cfg():
@@ -196,7 +198,15 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"ok":True,"storage":store.health(),"model":cfg()["model"],"has_api_key":bool(cfg()["key"])}
+    c=cfg()
+    return {
+        "ok":True,
+        "storage":store.health(),
+        "model":c["model"],
+        "has_api_key":bool(c["key"]),
+        "openai_secret_id":os.getenv("OPENAI_SECRET_ID",""),
+        "openai_secret_error":_openai_secret_error if not c["key"] else ""
+    }
 
 @app.post("/api/discover")
 async def discover(
