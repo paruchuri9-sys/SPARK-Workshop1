@@ -43,21 +43,14 @@ Resources:
             TableName: !Ref SparkData
         - S3CrudPolicy:
             BucketName: !Ref ExistingUploadBucket
-      Events:
-        Root:
-          Type: HttpApi
-          Properties:
-            Path: /{proxy+}
-            Method: ANY
-        RootExact:
-          Type: HttpApi
-          Properties:
-            Path: /
-            Method: ANY
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: BUFFERED
 
 Outputs:
   AppUrl:
-    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/'
+    Value:
+      Fn::GetAtt: SparkFunctionUrl.FunctionUrl
   DataTable:
     Value: !Ref SparkData
   UploadBucket:
