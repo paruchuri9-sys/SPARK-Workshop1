@@ -40,6 +40,8 @@ Resources:
           OPENAI_MODEL: gpt-5.6-sol
           OPENAI_SECRET_ID: SPARK/OpenAIApiKey2
           RESEARCH_SECRET_ID: SPARK/ResearchAdminToken
+          GOOGLE_DRIVE_FOLDER_ID: 1dkIJ_-GDdlITdBsv1hq1mnXRZUUGeKOs
+          GOOGLE_SERVICE_ACCOUNT_SECRET_ID: SPARK/GoogleDriveServiceAccount
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref SparkData
@@ -52,6 +54,7 @@ Resources:
               Resource:
                 - !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SPARK/OpenAIApiKey2-*'
                 - !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SPARK/ResearchAdminToken-*'
+                - !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SPARK/GoogleDriveServiceAccount-*'
       FunctionUrlConfig:
         AuthType: NONE
         InvokeMode: BUFFERED
