@@ -1,5 +1,5 @@
 import os, json, datetime, uuid
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 class Store:
     def __init__(self):
@@ -50,6 +50,63 @@ class Store:
             self.ddb.put_item(Item={"pk":"SESSION#"+session_id,"sk":"EVENT#"+event["created_at"]+"#"+event["event_id"],"event_type":event_type,"data_json":json.dumps(event,ensure_ascii=False),"created_at":event["created_at"]})
         else:
             self.events.append(event)
+
+
+    def list_sessions(self,limit:int=50):
+        limit=max(1,min(int(limit),200))
+        if self.mode=="aws":
+            items=[]
+            kwargs={"ProjectionExpression":"pk, sk, data_json, created_at, updated_at"}
+            while len(items)<limit:
+                r=self.ddb.scan(**kwargs)
+                for item in r.get("Items",[]):
+                    if item.get("sk")=="META":
+                        try:
+                            data=json.loads(item.get("data_json","{}"))
+                        except Exception:
+                            continue
+                        data.pop("lesson_text",None)
+                        items.append(data)
+                        if len(items)>=limit:
+                            break
+                lek=r.get("LastEvaluatedKey")
+                if not lek or len(items)>=limit:
+                    break
+                kwargs["ExclusiveStartKey"]=lek
+            items.sort(key=lambda x:x.get("created_at",""),reverse=True)
+            return items[:limit]
+        items=[]
+        for data in self.local.values():
+            copy=dict(data)
+            copy.pop("lesson_text",None)
+            items.append(copy)
+        items.sort(key=lambda x:x.get("created_at",""),reverse=True)
+        return items[:limit]
+
+    def get_events(self,session_id:str):
+        if self.mode=="aws":
+            from boto3.dynamodb.conditions import Key
+            r=self.ddb.query(
+                KeyConditionExpression=Key("pk").eq("SESSION#"+session_id) & Key("sk").begins_with("EVENT#")
+            )
+            events=[]
+            for item in r.get("Items",[]):
+                try:
+                    events.append(json.loads(item.get("data_json","{}")))
+                except Exception:
+                    pass
+            events.sort(key=lambda x:x.get("created_at",""))
+            return events
+        return [e for e in self.events if e.get("session_id")==session_id]
+
+    def research_bundle(self,session_id:str,include_lesson:bool=False):
+        session=self.get_session(session_id)
+        if not session:
+            return None
+        session=dict(session)
+        if not include_lesson:
+            session.pop("lesson_text",None)
+        return {"session":session,"events":self.get_events(session_id)}
 
     def store_upload(self,session_id:str,file_name:str,content:bytes):
         if self.mode=="aws":
