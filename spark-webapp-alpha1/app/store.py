@@ -1,4 +1,4 @@
-import os, json, datetime, uuid
+import os, json, datetime, uuid, urllib.parse
 from typing import Any, Dict, List
 
 class Store:
@@ -11,6 +11,8 @@ class Store:
         self.table_name=os.getenv("SPARK_TABLE","")
         self.bucket=os.getenv("SPARK_UPLOAD_BUCKET","")
         self.prefix=os.getenv("SPARK_UPLOAD_PREFIX","spark-alpha1").strip("/")
+        self.drive_folder_id=os.getenv("GOOGLE_DRIVE_FOLDER_ID","").strip()
+        self.google_secret_id=os.getenv("GOOGLE_SERVICE_ACCOUNT_SECRET_ID","").strip()
         if self.mode=="aws":
             import boto3
             self.ddb=boto3.resource("dynamodb").Table(self.table_name)
@@ -160,6 +162,81 @@ class Store:
         ]
         return artifact, "\n".join(lines)+"\n"
 
+
+    def _google_credentials(self):
+        if not self.google_secret_id:
+            return None
+        import boto3
+        from google.oauth2 import service_account
+        secret=boto3.client("secretsmanager").get_secret_value(SecretId=self.google_secret_id).get("SecretString","")
+        info=json.loads(secret)
+        return service_account.Credentials.from_service_account_info(
+            info,scopes=["https://www.googleapis.com/auth/drive.file"]
+        )
+
+    def _drive_access_token(self):
+        creds=self._google_credentials()
+        if not creds:
+            return None
+        from google.auth.transport.requests import Request
+        creds.refresh(Request())
+        return creds.token
+
+    def _drive_find_file(self,name:str,token:str):
+        if not self.drive_folder_id:
+            return None
+        import httpx
+        q=f"name='{name.replace(chr(39), chr(92)+chr(39))}' and '{self.drive_folder_id}' in parents and trashed=false"
+        params={"q":q,"fields":"files(id,name)","pageSize":"10"}
+        r=httpx.get(
+            "https://www.googleapis.com/drive/v3/files",
+            headers={"Authorization":"Bearer "+token},
+            params=params,timeout=20
+        )
+        r.raise_for_status()
+        files=r.json().get("files",[])
+        return files[0].get("id") if files else None
+
+    def _drive_upload_bytes(self,name:str,content:bytes,mime_type:str,token:str):
+        import httpx
+        existing=self._drive_find_file(name,token)
+        if existing:
+            r=httpx.patch(
+                f"https://www.googleapis.com/upload/drive/v3/files/{existing}",
+                headers={"Authorization":"Bearer "+token,"Content-Type":mime_type},
+                params={"uploadType":"media","fields":"id,name,modifiedTime"},
+                content=content,timeout=30
+            )
+            r.raise_for_status()
+            return r.json()
+        metadata={"name":name,"parents":[self.drive_folder_id]}
+        boundary="sparkboundary"
+        body=(
+            f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"
+            +json.dumps(metadata)
+            +f"\r\n--{boundary}\r\nContent-Type: {mime_type}\r\n\r\n"
+        ).encode("utf-8")+content+f"\r\n--{boundary}--\r\n".encode("utf-8")
+        r=httpx.post(
+            "https://www.googleapis.com/upload/drive/v3/files",
+            headers={"Authorization":"Bearer "+token,"Content-Type":f"multipart/related; boundary={boundary}"},
+            params={"uploadType":"multipart","fields":"id,name,modifiedTime"},
+            content=body,timeout=30
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def mirror_run_to_drive(self,session_id:str,artifact:dict,markdown:str):
+        if not self.drive_folder_id or not self.google_secret_id:
+            return {"status":"disabled"}
+        try:
+            token=self._drive_access_token()
+            base=f"SPARK-{session_id}"
+            md=self._drive_upload_bytes(base+".md",markdown.encode("utf-8"),"text/markdown; charset=utf-8",token)
+            js=self._drive_upload_bytes(base+".json",json.dumps(artifact,ensure_ascii=False,indent=2).encode("utf-8"),"application/json; charset=utf-8",token)
+            return {"status":"ok","markdown_file_id":md.get("id"),"json_file_id":js.get("id")}
+        except Exception as e:
+            return {"status":"error","error":f"{type(e).__name__}: {str(e)[:400]}"}
+
     def export_run_artifacts(self,session_id:str):
         built=self.build_run_artifacts(session_id)
         if not built:
@@ -182,7 +259,8 @@ class Store:
             ContentType="text/markdown; charset=utf-8",
             ServerSideEncryption="AES256"
         )
-        return {"json_key":json_key,"markdown_key":markdown_key}
+        drive=self.mirror_run_to_drive(session_id,artifact,markdown)
+        return {"json_key":json_key,"markdown_key":markdown_key,"drive":drive}
 
     def store_upload(self,session_id:str,file_name:str,content:bytes):
         if self.mode=="aws":
