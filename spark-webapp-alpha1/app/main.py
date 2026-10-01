@@ -397,6 +397,10 @@ def health():
         "research_api_configured":bool(os.getenv("RESEARCH_SECRET_ID","") or os.getenv("SPARK_RESEARCH_TOKEN",""))
     }
 
+@app.get("/health/drive")
+def health_drive():
+    return store.test_drive_connection()
+
 @app.post("/api/discover")
 async def discover(
     lesson_name: str=Form(""), grade_course: str=Form(""), duration: str=Form(""),
