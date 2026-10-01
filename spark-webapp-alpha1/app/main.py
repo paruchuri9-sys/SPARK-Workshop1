@@ -203,7 +203,7 @@ def require_research(provided: str):
     if not provided or not hmac.compare_digest(provided,expected):
         raise HTTPException(401,"Invalid research API token.")
 
-def call_model(instructions: str, prompt: str, schema_name: str, schema: Dict[str, Any], prompt_version: str):
+def call_model(instructions: str, prompt: str, schema_name: str, schema: Dict[str, Any], prompt_version: str, reasoning_effort: str="low", max_output_tokens: int=8000):
     c=cfg()
     if not c["key"]:
         raise HTTPException(503, "OPENAI_API_KEY is not configured.")
@@ -211,6 +211,8 @@ def call_model(instructions: str, prompt: str, schema_name: str, schema: Dict[st
         "model":c["model"],
         "instructions":instructions,
         "input":prompt,
+        "reasoning":{"effort":reasoning_effort},
+        "max_output_tokens":max_output_tokens,
         "text":{
             "format":{
                 "type":"json_schema",
@@ -244,12 +246,15 @@ def call_model(instructions: str, prompt: str, schema_name: str, schema: Dict[st
         "model":c["model"],
         "prompt_version":prompt_version,
         "schema_name":schema_name,
+        "reasoning_effort":reasoning_effort,
+        "max_output_tokens":max_output_tokens,
         "schema_version":SCHEMA_VERSION,
         "latency_ms":latency_ms,
         "request_id":request_id,
         "response_id":data.get("id",""),
         "input_tokens":usage.get("input_tokens"),
         "output_tokens":usage.get("output_tokens"),
+        "reasoning_tokens":(usage.get("output_tokens_details") or {}).get("reasoning_tokens"),
         "total_tokens":usage.get("total_tokens"),
         "status":"ok"
     }
@@ -428,7 +433,7 @@ async def discover(
         store.store_upload(session_id,file_name,file_bytes)
     store.event(session_id,"INPUT_CAPTURED",{"metadata":metadata,"lesson_chars":len(lesson_text),"source_modes":{"url":bool(source_url.strip()),"upload":bool(file_bytes),"pasted":bool(pasted_text.strip())}})
     prompt=json.dumps({"lesson":lesson_text,"context":metadata},ensure_ascii=False)
-    discovery,model_meta=call_model(DISCOVERY_INSTRUCTIONS,prompt,"spark_discovery",DISCOVERY_SCHEMA,DISCOVERY_PROMPT_VERSION)
+    discovery,model_meta=call_model(DISCOVERY_INSTRUCTIONS,prompt,"spark_discovery",DISCOVERY_SCHEMA,DISCOVERY_PROMPT_VERSION,reasoning_effort="low",max_output_tokens=8000)
     store.event(session_id,"MODEL_CALL",{"stage":"discover",**model_meta})
     store.event(session_id,"ACTIVITY_UNDERSTANDING",discovery.get("activity_map",{}))
     store.event(session_id,"CANDIDATE_MOMENTS",discovery.get("candidates",[]))
@@ -453,7 +458,7 @@ def design(session_id: str, req: DesignRequest):
     selection={"selected_ids":req.selected_ids,"constraints":req.constraints,"educator_input":req.educator_input}
     store.event(session_id,"EDUCATOR_SELECTION",selection)
     prompt=json.dumps({"lesson_text":session.get("lesson_text",""),"selected_moments":chosen,"constraints":req.constraints,"educator_input":req.educator_input},ensure_ascii=False)
-    result,model_meta=call_model(DESIGN_INSTRUCTIONS,prompt,"spark_develop",DESIGN_SCHEMA,DESIGN_PROMPT_VERSION)
+    result,model_meta=call_model(DESIGN_INSTRUCTIONS,prompt,"spark_develop",DESIGN_SCHEMA,DESIGN_PROMPT_VERSION,reasoning_effort="low",max_output_tokens=6000)
     store.event(session_id,"MODEL_CALL",{"stage":"develop",**model_meta})
     store.event(session_id,"DEVELOPED_OUTPUT",result)
     store.update_session(session_id,{"selection":selection,"developed_output":result,"develop_telemetry":model_meta})
