@@ -12,6 +12,7 @@ class Store:
         self.bucket=os.getenv("SPARK_UPLOAD_BUCKET","")
         self.prefix=os.getenv("SPARK_UPLOAD_PREFIX","spark-alpha1").strip("/")
         self.drive_folder_id=os.getenv("GOOGLE_DRIVE_FOLDER_ID","").strip()
+        self.google_oauth_secret_id=os.getenv("GOOGLE_OAUTH_SECRET_ID","").strip()
         self.google_wif_audience=os.getenv("GOOGLE_WIF_AUDIENCE","").strip()
         self.google_service_account=os.getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL","").strip()
         if self.mode=="aws":
@@ -165,6 +166,29 @@ class Store:
 
 
     def _google_credentials(self):
+        # Preferred Alpha path: user OAuth stored securely in AWS Secrets Manager.
+        # Expected JSON: {"client_id":"...","client_secret":"...","refresh_token":"..."}
+        if self.google_oauth_secret_id:
+            try:
+                import boto3
+                from google.oauth2.credentials import Credentials
+                secret=boto3.client("secretsmanager").get_secret_value(
+                    SecretId=self.google_oauth_secret_id
+                ).get("SecretString","")
+                info=json.loads(secret)
+                if info.get("client_id") and info.get("client_secret") and info.get("refresh_token"):
+                    return Credentials(
+                        token=None,
+                        refresh_token=info["refresh_token"],
+                        token_uri="https://oauth2.googleapis.com/token",
+                        client_id=info["client_id"],
+                        client_secret=info["client_secret"],
+                        scopes=["https://www.googleapis.com/auth/drive.file"]
+                    )
+            except Exception:
+                # Fall through to WIF so existing diagnostics remain usable.
+                pass
+
         if not self.google_wif_audience or not self.google_service_account:
             return None
         import google.auth
@@ -185,7 +209,7 @@ class Store:
                 +self.google_service_account+":generateAccessToken"
         }
         creds,_=google.auth.load_credentials_from_dict(
-            info,scopes=["https://www.googleapis.com/auth/drive"]
+            info,scopes=["https://www.googleapis.com/auth/drive.file"]
         )
         return creds
 
@@ -242,7 +266,7 @@ class Store:
 
     def test_drive_connection(self):
         status={
-            "configured":bool(self.drive_folder_id and self.google_wif_audience and self.google_service_account),
+            "configured":bool(self.drive_folder_id and (self.google_oauth_secret_id or (self.google_wif_audience and self.google_service_account))),
             "folder_id":self.drive_folder_id,
             "service_account":self.google_service_account,
             "wif_audience":self.google_wif_audience
@@ -282,7 +306,7 @@ class Store:
             return status
 
     def test_drive_write(self):
-        status={"configured":bool(self.drive_folder_id and self.google_wif_audience and self.google_service_account)}
+        status={"configured":bool(self.drive_folder_id and (self.google_oauth_secret_id or (self.google_wif_audience and self.google_service_account)))}
         if not status["configured"]:
             status["status"]="disabled"
             return status
@@ -308,7 +332,7 @@ class Store:
             return status
 
     def mirror_run_to_drive(self,session_id:str,artifact:dict,markdown:str):
-        if not self.drive_folder_id or not self.google_wif_audience or not self.google_service_account:
+        if not self.drive_folder_id or not (self.google_oauth_secret_id or (self.google_wif_audience and self.google_service_account)):
             return {"status":"disabled"}
         try:
             token=self._drive_access_token()
