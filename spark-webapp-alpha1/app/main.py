@@ -17,6 +17,92 @@ MAX_LESSON_CHARS = 120000
 DISCOVERY_INSTRUCTIONS = """You are SPARK's discovery stage. Given an existing lesson/activity, first reconstruct what students already do and what reasoning is already present. Then generate candidate reasoning moments liberally. Criticize each candidate for redundancy, genericness, grounding, lesson evidence, consequentiality, feasibility, time burden, dependencies, and duplication. Surface at most five defensible moments. Zero is valid. Do not redesign the lesson yet. Return JSON only."""
 DESIGN_INSTRUCTIONS = """You are SPARK's develop stage. Use only the educator-selected moments plus the educator's constraints and further input. Create concrete teacher-usable strengthening for those moments while preserving the existing lesson unless change is necessary. Make the adaptation to educator constraints explicit. Return JSON only."""
 
+DISCOVERY_SCHEMA = {
+    "type":"object",
+    "additionalProperties":False,
+    "properties":{
+        "activity_map":{
+            "type":"object","additionalProperties":False,
+            "properties":{
+                "instructional_goal":{"type":"string"},
+                "student_sequence":{"type":"array","items":{"type":"string"}},
+                "existing_reasoning":{"type":"array","items":{"type":"string"}},
+                "constraints":{"type":"array","items":{"type":"string"}},
+                "summary":{"type":"string"}
+            },
+            "required":["instructional_goal","student_sequence","existing_reasoning","constraints","summary"]
+        },
+        "candidates":{
+            "type":"array",
+            "items":{
+                "type":"object","additionalProperties":False,
+                "properties":{
+                    "id":{"type":"string"},
+                    "location":{"type":"string"},
+                    "current_task":{"type":"string"},
+                    "reasoning_gap":{"type":"string"},
+                    "proposed_judgment":{"type":"string"},
+                    "evidence_from_lesson":{"type":"string"},
+                    "novelty_check":{"type":"string"},
+                    "estimated_burden":{"type":"string"},
+                    "decision":{"type":"string","enum":["surface","reject"]},
+                    "decision_reason":{"type":"string"}
+                },
+                "required":["id","location","current_task","reasoning_gap","proposed_judgment","evidence_from_lesson","novelty_check","estimated_burden","decision","decision_reason"]
+            }
+        },
+        "surfaced_moments":{
+            "type":"array","maxItems":5,
+            "items":{
+                "type":"object","additionalProperties":False,
+                "properties":{
+                    "id":{"type":"string"},
+                    "title":{"type":"string"},
+                    "location":{"type":"string"},
+                    "what_students_do_now":{"type":"string"},
+                    "reasoning_opportunity":{"type":"string"},
+                    "why_worthwhile":{"type":"string"},
+                    "what_makes_it_new":{"type":"string"},
+                    "lesson_evidence":{"type":"string"},
+                    "estimated_burden":{"type":"string"},
+                    "uncertainties":{"type":"array","items":{"type":"string"}}
+                },
+                "required":["id","title","location","what_students_do_now","reasoning_opportunity","why_worthwhile","what_makes_it_new","lesson_evidence","estimated_burden","uncertainties"]
+            }
+        }
+    },
+    "required":["activity_map","candidates","surfaced_moments"]
+}
+
+DESIGN_SCHEMA = {
+    "type":"object",
+    "additionalProperties":False,
+    "properties":{
+        "designs":{
+            "type":"array",
+            "items":{
+                "type":"object","additionalProperties":False,
+                "properties":{
+                    "moment_id":{"type":"string"},
+                    "teacher_facing_title":{"type":"string"},
+                    "placement":{"type":"string"},
+                    "student_task":{"type":"string"},
+                    "teacher_moves":{"type":"array","items":{"type":"string"}},
+                    "materials_or_changes":{"type":"array","items":{"type":"string"}},
+                    "estimated_time":{"type":"string"},
+                    "adaptation_to_constraints":{"type":"string"},
+                    "reasoning_target":{"type":"string"},
+                    "success_indicators":{"type":"array","items":{"type":"string"}},
+                    "cautions":{"type":"array","items":{"type":"string"}}
+                },
+                "required":["moment_id","teacher_facing_title","placement","student_task","teacher_moves","materials_or_changes","estimated_time","adaptation_to_constraints","reasoning_target","success_indicators","cautions"]
+            }
+        },
+        "integration_notes":{"type":"array","items":{"type":"string"}}
+    },
+    "required":["designs","integration_notes"]
+}
+
 def now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
@@ -63,12 +149,23 @@ def cfg():
         "url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     }
 
-def call_model(instructions: str, prompt: str) -> Dict[str, Any]:
+def call_model(instructions: str, prompt: str, schema_name: str, schema: Dict[str, Any]) -> Dict[str, Any]:
     c=cfg()
     if not c["key"]:
         raise HTTPException(503, "OPENAI_API_KEY is not configured.")
-    payload={"model":c["model"],"instructions":instructions,"input":prompt,
-             "text":{"format":{"type":"json_object"}}}
+    payload={
+        "model":c["model"],
+        "instructions":instructions,
+        "input":prompt,
+        "text":{
+            "format":{
+                "type":"json_schema",
+                "name":schema_name,
+                "strict":True,
+                "schema":schema
+            }
+        }
+    }
     with httpx.Client(timeout=120) as client:
         r=client.post(c["url"]+"/responses",headers={"Authorization":"Bearer "+c["key"],"Content-Type":"application/json"},json=payload)
     if r.status_code>=400:
@@ -84,7 +181,7 @@ def call_model(instructions: str, prompt: str) -> Dict[str, Any]:
     try:
         return json.loads(text)
     except Exception:
-        raise HTTPException(502, "Model did not return valid JSON.")
+        raise HTTPException(502, "Model did not return valid structured JSON.")
 
 def extract_text(name: str, content: bytes) -> str:
     ext=(name or "").lower().rsplit(".",1)[-1] if "." in (name or "") else ""
@@ -251,7 +348,7 @@ async def discover(
         store.store_upload(session_id,file_name,file_bytes)
     store.event(session_id,"INPUT_CAPTURED",{"metadata":metadata,"lesson_chars":len(lesson_text),"source_modes":{"url":bool(source_url.strip()),"upload":bool(file_bytes),"pasted":bool(pasted_text.strip())}})
     prompt=json.dumps({"lesson":lesson_text,"context":metadata},ensure_ascii=False)
-    discovery=call_model(DISCOVERY_INSTRUCTIONS,prompt)
+    discovery=call_model(DISCOVERY_INSTRUCTIONS,prompt,"spark_discovery",DISCOVERY_SCHEMA)
     store.event(session_id,"ACTIVITY_UNDERSTANDING",discovery.get("activity_map",{}))
     store.event(session_id,"CANDIDATE_MOMENTS",discovery.get("candidates",[]))
     store.event(session_id,"SURFACED_MOMENTS",discovery.get("surfaced_moments",[]))
@@ -269,7 +366,7 @@ def design(session_id: str, req: DesignRequest):
     selection={"selected_ids":req.selected_ids,"constraints":req.constraints,"educator_input":req.educator_input}
     store.event(session_id,"EDUCATOR_SELECTION",selection)
     prompt=json.dumps({"lesson_text":session.get("lesson_text",""),"selected_moments":chosen,"constraints":req.constraints,"educator_input":req.educator_input},ensure_ascii=False)
-    result=call_model(DESIGN_INSTRUCTIONS,prompt)
+    result=call_model(DESIGN_INSTRUCTIONS,prompt,"spark_develop",DESIGN_SCHEMA)
     store.event(session_id,"DEVELOPED_OUTPUT",result)
     store.update_session(session_id,{"selection":selection,"developed_output":result})
     return result
