@@ -108,6 +108,82 @@ class Store:
             session.pop("lesson_text",None)
         return {"session":session,"events":self.get_events(session_id)}
 
+
+    def build_run_artifacts(self,session_id:str):
+        session=self.get_session(session_id)
+        if not session:
+            return None
+        events=self.get_events(session_id)
+        safe_session=dict(session)
+        safe_session.pop("lesson_text",None)
+        artifact={
+            "session_id":session_id,
+            "exported_at":self._ts(),
+            "session":safe_session,
+            "events":events,
+            "source_text_included":False
+        }
+        metadata=safe_session.get("metadata") or {}
+        discovery=safe_session.get("discovery") or {}
+        lines=[
+            f"# SPARK Alpha 1 Run {session_id}",
+            "",
+            f"- Exported: {artifact['exported_at']}",
+            f"- Lesson: {metadata.get('lesson_name','')}",
+            f"- Grade/course: {metadata.get('grade_course','')}",
+            f"- Duration: {metadata.get('duration','')}",
+            f"- Source URL: {metadata.get('source_url','')}",
+            f"- Resolved URL: {metadata.get('resolved_url','')}",
+            f"- Prompt version: {safe_session.get('prompt_version','')}",
+            f"- Schema version: {safe_session.get('schema_version','')}",
+            "",
+            "## Activity map",
+            json.dumps(discovery.get("activity_map",{}),ensure_ascii=False,indent=2),
+            "",
+            "## Candidates",
+            json.dumps(discovery.get("candidates",[]),ensure_ascii=False,indent=2),
+            "",
+            "## Surfaced moments",
+            json.dumps(discovery.get("surfaced_moments",[]),ensure_ascii=False,indent=2),
+            "",
+            "## Educator selection",
+            json.dumps(safe_session.get("selection",{}),ensure_ascii=False,indent=2),
+            "",
+            "## Developed output",
+            json.dumps(safe_session.get("developed_output",{}),ensure_ascii=False,indent=2),
+            "",
+            "## Telemetry",
+            json.dumps({"discover":safe_session.get("telemetry",{}),"develop":safe_session.get("develop_telemetry",{})},ensure_ascii=False,indent=2),
+            "",
+            "## Events",
+            json.dumps(events,ensure_ascii=False,indent=2)
+        ]
+        return artifact, "\n".join(lines)+"\n"
+
+    def export_run_artifacts(self,session_id:str):
+        built=self.build_run_artifacts(session_id)
+        if not built:
+            return None
+        artifact,markdown=built
+        if self.mode!="aws":
+            return {"json_key":None,"markdown_key":None,"artifact":artifact,"markdown":markdown}
+        base=f"{self.prefix}/research/runs/{session_id}"
+        json_key=base+".json"
+        markdown_key=base+".md"
+        self.s3.put_object(
+            Bucket=self.bucket,Key=json_key,
+            Body=json.dumps(artifact,ensure_ascii=False,indent=2).encode("utf-8"),
+            ContentType="application/json; charset=utf-8",
+            ServerSideEncryption="AES256"
+        )
+        self.s3.put_object(
+            Bucket=self.bucket,Key=markdown_key,
+            Body=markdown.encode("utf-8"),
+            ContentType="text/markdown; charset=utf-8",
+            ServerSideEncryption="AES256"
+        )
+        return {"json_key":json_key,"markdown_key":markdown_key}
+
     def store_upload(self,session_id:str,file_name:str,content:bytes):
         if self.mode=="aws":
             key=f"{self.prefix}/sessions/{session_id}/source/{file_name}"
