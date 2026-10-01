@@ -59,7 +59,9 @@ Use this as the SSOT for the temporary Alpha 1 deployment policy. Do not broaden
         "iam:AttachRolePolicy",
         "iam:DetachRolePolicy",
         "iam:ListAttachedRolePolicies",
-        "iam:ListRolePolicies"
+        "iam:ListRolePolicies",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:UpdateRole"
       ],
       "Resource": "arn:aws:iam::949163302310:role/SPARK-Alpha1-WebApp-*"
     },
@@ -90,7 +92,9 @@ Use this as the SSOT for the temporary Alpha 1 deployment policy. Do not broaden
         "apigateway:POST",
         "apigateway:PUT",
         "apigateway:PATCH",
-        "apigateway:DELETE"
+        "apigateway:DELETE",
+        "apigateway:TagResource",
+        "apigateway:UntagResource"
       ],
       "Resource": "arn:aws:apigateway:us-east-1::*"
     }
