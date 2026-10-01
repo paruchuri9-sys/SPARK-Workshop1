@@ -38,7 +38,7 @@ Resources:
           SPARK_UPLOAD_BUCKET: !Ref ExistingUploadBucket
           SPARK_UPLOAD_PREFIX: spark-alpha1
           OPENAI_MODEL: gpt-5.6-sol
-          OPENAI_SECRET_ID: SPARK/OpenAIApiKey
+          OPENAI_SECRET_ID: SPARK/OpenAIApiKey2
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref SparkData
@@ -48,7 +48,7 @@ Resources:
             - Effect: Allow
               Action:
                 - secretsmanager:GetSecretValue
-              Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SPARK/OpenAIApiKey-*'
+              Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SPARK/OpenAIApiKey2-*'
       FunctionUrlConfig:
         AuthType: NONE
         InvokeMode: BUFFERED
