@@ -281,6 +281,32 @@ class Store:
             status["error"]=f"{type(e).__name__}: {str(e)[:500]}"
             return status
 
+    def test_drive_write(self):
+        status={"configured":bool(self.drive_folder_id and self.google_wif_audience and self.google_service_account)}
+        if not status["configured"]:
+            status["status"]="disabled"
+            return status
+        try:
+            token=self._drive_access_token()
+            import httpx
+            name="SPARK-drive-health-probe.txt"
+            created=self._drive_upload_bytes(name,b"SPARK Drive write probe\n","text/plain; charset=utf-8",token)
+            file_id=created.get("id")
+            status["created_file_id"]=file_id
+            if file_id:
+                r=httpx.delete(
+                    f"https://www.googleapis.com/drive/v3/files/{file_id}",
+                    headers={"Authorization":"Bearer "+token},
+                    timeout=20
+                )
+                status["delete_http_status"]=r.status_code
+            status["status"]="ok"
+            return status
+        except Exception as e:
+            status["status"]="error"
+            status["error"]=f"{type(e).__name__}: {str(e)[:700]}"
+            return status
+
     def mirror_run_to_drive(self,session_id:str,artifact:dict,markdown:str):
         if not self.drive_folder_id or not self.google_wif_audience or not self.google_service_account:
             return {"status":"disabled"}
