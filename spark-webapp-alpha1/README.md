@@ -53,3 +53,16 @@ Discovery prompt version `discover-0.2` uses a stricter gate: newness, consequen
 ## Telemetry
 
 Each new discovery run records model latency, total run latency, URL/file extraction time, OpenAI request/response IDs when available, token usage, prompt/schema versions, input size, candidate count, and surfaced count.
+
+
+## Google Drive research mirror
+
+The canonical research artifacts remain in S3. If AWS Secrets Manager contains a Google service-account JSON secret named `SPARK/GoogleDriveServiceAccount`, Lambda mirrors each run into the configured Drive folder `SPARK Alpha 1 Runs`.
+
+Setup:
+1. Create a Google Cloud service account with Drive API access.
+2. Store its complete JSON credential document in AWS Secrets Manager as `SPARK/GoogleDriveServiceAccount`.
+3. Share the Drive folder with the service account's `client_email` as Editor.
+4. No Google credential is stored in GitHub.
+
+If this secret is absent or Drive upload fails, the SPARK run remains successful and the S3 research artifacts are still preserved. The export event records Drive mirror status.
