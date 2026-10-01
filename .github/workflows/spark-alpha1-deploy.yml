@@ -32,5 +32,16 @@ jobs:
         run: sam build --template-file spark-webapp-alpha1/deploy/aws/template.yaml
 
       - name: Deploy
+        id: deploy
+        continue-on-error: true
         run: |
           sam deploy             --stack-name SPARK-Alpha1-WebApp             --region us-east-1             --resolve-s3             --capabilities CAPABILITY_IAM             --no-confirm-changeset             --no-fail-on-empty-changeset
+
+      - name: Diagnose SAM managed stack
+        if: steps.deploy.outcome == 'failure'
+        run: |
+          echo "=== aws-sam-cli-managed-default ==="
+          aws cloudformation describe-stack-events             --stack-name aws-sam-cli-managed-default             --region us-east-1             --query 'StackEvents[0:20].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]'             --output table || true
+          echo "=== SPARK-Alpha1-WebApp ==="
+          aws cloudformation describe-stack-events             --stack-name SPARK-Alpha1-WebApp             --region us-east-1             --query 'StackEvents[0:30].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]'             --output table || true
+          exit 1
