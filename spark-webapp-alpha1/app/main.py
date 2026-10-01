@@ -392,9 +392,9 @@ HTML="""<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' c
 <title>SPARK Alpha 1</title><style>
 body{font-family:system-ui;margin:0;background:#faf9f6;color:#191919}.wrap{max-width:900px;margin:auto;padding:36px 20px}
 .card{background:white;border:1px solid #ddd;border-radius:16px;padding:22px;margin:16px 0}h1{font-size:42px;line-height:1.05}
-label{display:block;font-weight:650;margin:12px 0}input,textarea{width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;margin-top:5px}
+label{display:block;font-weight:650;margin:12px 0}input,textarea,select{width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;margin-top:5px}
 button{border:0;border-radius:999px;background:#4f2d7f;color:white;padding:11px 16px;font-weight:750;cursor:pointer}
-.moment{border:1px solid #ddd;border-radius:12px;padding:16px;margin:10px 0}.muted{color:#666}.hidden{display:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.moment{border:1px solid #ddd;border-radius:12px;padding:16px;margin:10px 0}.muted{color:#666}.hidden{display:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.eval{border-top:1px solid #eee;margin-top:14px;padding-top:12px}.eval-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.small{font-size:13px}.saved{color:#176b34;font-weight:650}@media(max-width:700px){.eval-grid{grid-template-columns:1fr}}
 pre{white-space:pre-wrap;background:#111;color:#eee;padding:14px;border-radius:10px;overflow:auto}@media(max-width:700px){.grid{grid-template-columns:1fr}}
 </style></head><body><main class='wrap'><div class='muted'>SPARK · ALPHA 1</div><h1>Uncover worthwhile reasoning opportunities</h1>
 <p>Existing lesson → discover moments → educator selects → develop selected moments.</p>
@@ -410,20 +410,66 @@ pre{white-space:pre-wrap;background:#111;color:#eee;padding:14px;border-radius:1
 <section id='m' class='card hidden'><h2>3. Choose moments</h2><div id='moments'></div>
 <div class='grid'><label>Constraints<textarea id='constraints' rows='4'></textarea></label><label>Further input<textarea id='more' rows='4'></textarea></label></div>
 <button id='develop'>Develop selected moments</button><p id='ds' class='muted'></p></section>
-<section id='d' class='card hidden'><h2>4. Customized strengthening</h2><div id='design'></div></section></main>
+<section id='e' class='card hidden'><h2>4. Research review</h2><p class='muted'>Rate what SPARK surfaced. The short fields are the core review; open details only when useful.</p><div id='evalmoments'></div>
+<div class='moment'><h3>Run-level review</h3>
+<div class='eval-grid'>
+<label>At least one worthwhile + new + otherwise missed?<select id='run_primary'><option value=''>—</option><option>Yes</option><option>Maybe</option><option>No</option></select></label>
+<label>Did SPARK misunderstand the lesson?<select id='run_misunderstood'><option value=''>—</option><option>No</option><option>Partly</option><option>Yes</option></select></label>
+<label>Existing reasoning richness<select id='run_richness'><option value=''>—</option><option>Low</option><option>Moderate</option><option>High</option></select></label>
+</div>
+<label>Overlap / redundancy<textarea id='run_overlap' rows='2'></textarea></label>
+<label>Missed opportunities, one per line<textarea id='run_missed' rows='3'></textarea></label>
+<label>False positives, one per line<textarea id='run_false' rows='3'></textarea></label>
+<label>Overall reaction<textarea id='run_overall' rows='3'></textarea></label>
+<label>Notes<textarea id='run_notes' rows='3'></textarea></label>
+<button id='saveRunEval' type='button'>Save run review</button> <span id='runEvalStatus' class='muted'></span>
+</div></section>
+<section id='d' class='card hidden'><h2>5. Customized strengthening</h2><div id='design'></div></section></main>
 <script>
 let session=null,selected=new Set(),discovery=null;
 const esc=x=>String(x??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ynm=(id,label)=>'<label>'+label+'<select id="'+id+'"><option value="">—</option><option>Yes</option><option>Maybe</option><option>No</option></select></label>';
+const tri=(id,label)=>'<label>'+label+'<select id="'+id+'"><option value="">—</option><option>Low</option><option>Moderate</option><option>High</option></select></label>';
+const lines=x=>x.split('\n').map(v=>v.trim()).filter(Boolean);
 document.getElementById('f').onsubmit=async e=>{e.preventDefault();s.textContent='Analyzing...';let fd=new FormData(e.target);
 let res=await fetch('/api/discover',{method:'POST',body:fd});let data=await res.json();if(!res.ok){s.textContent=data.detail||'Failed';return}
 session=data.session_id;discovery=data.discovery;s.textContent='Done';r.classList.remove('hidden');m.classList.remove('hidden');
 map.innerHTML='<p><b>Goal:</b> '+esc(data.discovery.activity_map?.instructional_goal)+'</p><p>'+esc(data.discovery.activity_map?.summary)+'</p>';
 trace.textContent=JSON.stringify({activity_map:data.discovery.activity_map,candidates:data.discovery.candidates},null,2);
 moments.innerHTML=(data.discovery.surfaced_moments||[]).map(x=>'<div class="moment"><label><input type="checkbox" data-id="'+esc(x.id)+'"> <b>'+esc(x.title)+'</b></label><p><b>Moment:</b> '+esc(x.location)+'</p><p><b>Now:</b> '+esc(x.what_students_do_now)+'</p><p><b>Opportunity:</b> '+esc(x.reasoning_opportunity)+'</p><p><b>Why:</b> '+esc(x.why_worthwhile)+'</p><p><b>New because:</b> '+esc(x.what_makes_it_new)+'</p><p class="muted"><b>Evidence:</b> '+esc(x.lesson_evidence)+'</p><p class="muted"><b>Burden:</b> '+esc(x.estimated_burden)+'</p></div>').join('');
-document.querySelectorAll('[data-id]').forEach(cb=>cb.onchange=()=>cb.checked?selected.add(cb.dataset.id):selected.delete(cb.dataset.id));};
+document.querySelectorAll('[data-id]').forEach(cb=>cb.onchange=()=>cb.checked?selected.add(cb.dataset.id):selected.delete(cb.dataset.id));
+e.classList.remove('hidden');
+evalmoments.innerHTML=(data.discovery.surfaced_moments||[]).map(x=>{
+ const p='ev_'+x.id+'_';
+ return '<div class="moment"><h3>'+esc(x.title)+'</h3><div class="eval-grid">'+
+ ynm(p+'worthwhile','Worthwhile?')+ynm(p+'newness','Genuinely new?')+ynm(p+'missed','Would otherwise be missed?')+
+ ynm(p+'usable','Teacher-usable?')+ynm(p+'conseq','Consequential?')+ynm(p+'distinct','Distinct from others?')+
+ '</div><details class="eval"><summary>More detail</summary><div class="eval-grid">'+
+ tri(p+'impact','Potential impact')+tri(p+'specific','Specificity')+tri(p+'ground','Grounding')+
+ tri(p+'reason','Reasoning significance')+tri(p+'domain','Domain relevance')+tri(p+'student','Student appropriateness')+
+ tri(p+'burden','Implementation burden')+tri(p+'clarity','Clarity')+tri(p+'fit','Curricular fit')+
+ ynm(p+'materials','Needs new materials?')+ynm(p+'disrupt','Disrupts lesson flow?')+ynm(p+'dup','Duplication risk?')+
+ ynm(p+'modify','Would modify before use?')+
+ '</div><label>Modification / rejection reason<textarea id="'+p+'mod'+'" rows="2"></textarea></label><label>Confidence<select id="'+p+'conf'+'"><option value="">—</option><option>Low</option><option>Moderate</option><option>High</option></select></label><label>Comment<textarea id="'+p+'comment'+'" rows="2"></textarea></label></details><button type="button" data-save-eval="'+esc(x.id)+'">Save review</button> <span id="'+p+'status" class="muted"></span></div>';
+}).join('');
+document.querySelectorAll('[data-save-eval]').forEach(btn=>btn.onclick=async()=>{
+ const id=btn.dataset.saveEval,p='ev_'+id+'_',v=x=>document.getElementById(p+x)?.value||'';
+ const payload={moment_id:id,worthwhile:v('worthwhile'),newness:v('newness'),otherwise_missed:v('missed'),teacher_usability:v('usable'),consequentiality:v('conseq'),distinctness:v('distinct'),potential_impact:v('impact'),specificity:v('specific'),grounding:v('ground'),reasoning_significance:v('reason'),domain_relevance:v('domain'),student_appropriateness:v('student'),implementation_burden:v('burden'),clarity:v('clarity'),curricular_fit:v('fit'),new_materials_needed:v('materials'),disruption:v('disrupt'),duplication_risk:v('dup'),would_modify:v('modify'),modification:v('mod'),rejection_reason:v('mod'),confidence:v('conf'),comment:v('comment')};
+ const st=document.getElementById(p+'status');st.textContent='Saving...';
+ const res=await fetch('/api/session/'+session+'/evaluation/moment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ st.textContent=res.ok?'Saved':'Failed';st.className=res.ok?'saved':'muted';
+});
+};
 develop.onclick=async()=>{if(!selected.size){ds.textContent='Select at least one moment.';return}ds.textContent='Developing...';
 let res=await fetch('/api/session/'+session+'/design',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selected_ids:[...selected],constraints:constraints.value,educator_input:more.value})});
 let data=await res.json();if(!res.ok){ds.textContent=data.detail||'Failed';return}ds.textContent='Done';d.classList.remove('hidden');design.innerHTML=(data.designs||[]).map(x=>'<div class="moment"><h3>'+esc(x.teacher_facing_title)+'</h3><p><b>Placement:</b> '+esc(x.placement)+'</p><p><b>Student task:</b> '+esc(x.student_task)+'</p><p><b>Estimated time:</b> '+esc(x.estimated_time)+'</p><p><b>Reasoning target:</b> '+esc(x.reasoning_target)+'</p><p><b>Constraint adaptation:</b> '+esc(x.adaptation_to_constraints)+'</p></div>').join('');};
+saveRunEval.onclick=async()=>{
+ if(!session)return;
+ runEvalStatus.textContent='Saving...';
+ const payload={at_least_one_worthwhile_new_missed:run_primary.value,misunderstood_lesson:run_misunderstood.value,existing_reasoning_richness:run_richness.value,overlap_or_redundancy:run_overlap.value,missed_opportunities:lines(run_missed.value),false_positives:lines(run_false.value),overall_reaction:run_overall.value,notes:run_notes.value};
+ const res=await fetch('/api/session/'+session+'/evaluation/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ runEvalStatus.textContent=res.ok?'Saved':'Failed';runEvalStatus.className=res.ok?'saved':'muted';
+};
 </script></body></html>"""
 
 @app.get("/",response_class=HTMLResponse)
