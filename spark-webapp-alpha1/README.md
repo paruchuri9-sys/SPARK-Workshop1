@@ -66,3 +66,15 @@ Setup:
 4. No Google credential is stored in GitHub.
 
 If this secret is absent or Drive upload fails, the SPARK run remains successful and the S3 research artifacts are still preserved. The export event records Drive mirror status.
+
+
+## Google Drive WIF authentication
+
+Google Drive mirroring now uses AWS Workload Identity Federation and service-account impersonation. No Google service-account private key is required.
+
+Configured provider:
+- audience: `//iam.googleapis.com/projects/798492068569/locations/global/workloadIdentityPools/spark-aws/providers/aws-kbrep`
+- service account: `spark-423@spark-510317.iam.gserviceaccount.com`
+- target Drive folder: `1dkIJ_-GDdlITdBsv1hq1mnXRZUUGeKOs`
+
+The Google WIF pool must grant the Lambda execution role `SPARK-Alpha1-WebApp-SparkFunctionRole-UTpJrHiZyBDp` permission to impersonate the service account. The Drive folder must be shared with that service account as Editor. Lambda exchanges its short-lived AWS role credentials through Google STS and then obtains a short-lived service-account access token.
