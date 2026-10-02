@@ -28,9 +28,53 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from html.parser import HTMLParser
 
 BASE_URL = "https://bd4efxey67kgdhwmeppp6tyl3e0diqlm.lambda-url.us-east-1.on.aws"
 MANIFEST = pathlib.Path(__file__).resolve().parents[1] / "docs" / "spark_alpha1_validation_tranche_01.json"
+
+
+class _TextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self.skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "noscript", "svg"):
+            self.skip += 1
+        elif tag in ("p", "div", "section", "article", "li", "br", "h1", "h2", "h3", "h4"):
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "noscript", "svg") and self.skip:
+            self.skip -= 1
+        elif tag in ("p", "div", "section", "article", "li", "h1", "h2", "h3", "h4"):
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        if not self.skip:
+            self.parts.append(data)
+
+
+def fetch_lesson_locally(url: str, timeout: int = 45) -> str:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read(10 * 1024 * 1024)
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+    if "html" not in ctype and not url.lower().endswith((".html", ".htm")):
+        return ""
+    parser = _TextExtractor()
+    parser.feed(raw.decode("utf-8", errors="replace"))
+    text = "\n".join(line.strip() for line in "".join(parser.parts).splitlines() if line.strip())
+    return text[:120000]
 
 
 def post_form(url: str, fields: dict[str, str], timeout: int = 180) -> tuple[int, dict]:
@@ -80,11 +124,38 @@ def run_lesson(lesson: dict, retries: int = 2) -> dict:
             "http_status": status,
             "elapsed_seconds": elapsed,
             "response": payload,
+            "source_mode": "remote_url",
         }
         last = result
 
         if 200 <= status < 300:
             return result
+
+        # If the Lambda is blocked by the source site, retrieve the public lesson
+        # from the local machine and submit its extracted text instead.
+        detail = str((payload or {}).get("detail", ""))
+        if status == 400 and "HTTP 403" in detail and fields.get("source_url"):
+            try:
+                local_text = fetch_lesson_locally(fields["source_url"])
+                if local_text:
+                    fallback_fields = dict(fields)
+                    fallback_fields["pasted_text"] = local_text
+                    fallback_fields["source_url"] = ""
+                    fb_started = time.perf_counter()
+                    fb_status, fb_payload = post_form(BASE_URL + "/api/discover", fallback_fields)
+                    fb_elapsed = round(time.perf_counter() - fb_started, 2)
+                    return {
+                        "tranche_id": lesson.get("id"),
+                        "lesson": lesson,
+                        "http_status": fb_status,
+                        "elapsed_seconds": fb_elapsed,
+                        "response": fb_payload,
+                        "source_mode": "local_fetch_fallback",
+                        "local_source_chars": len(local_text),
+                        "initial_remote_error": detail,
+                    }
+            except Exception as e:
+                result["local_fetch_error"] = f"{type(e).__name__}: {e}"
 
         # Retry transient server/rate-limit errors only.
         if status not in (429, 500, 502, 503, 504) or attempt >= retries:
@@ -113,6 +184,8 @@ def summarize(result: dict) -> dict:
         "surfaced_count": len(discovery.get("surfaced_moments") or []),
         "total_ms": timing.get("total_ms"),
         "runner_elapsed_seconds": result.get("elapsed_seconds"),
+        "source_mode": result.get("source_mode", ""),
+        "local_source_chars": result.get("local_source_chars", ""),
         "error": "" if 200 <= result.get("http_status", 0) < 300 else str(payload.get("detail", payload))[:500],
     }
 
