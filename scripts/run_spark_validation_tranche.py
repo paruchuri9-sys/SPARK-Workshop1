@@ -125,8 +125,7 @@ def main() -> int:
     p.add_argument("--base-url", default=BASE_URL)
     args = p.parse_args()
 
-    global BASE_URL
-    BASE_URL = args.base_url.rstrip("/")
+    base_url = args.base_url.rstrip("/")
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     lessons = manifest["lessons"]
@@ -146,7 +145,7 @@ def main() -> int:
     summaries = []
 
     print(f"SPARK validation tranche: {manifest.get('tranche_id')}")
-    print(f"Endpoint: {BASE_URL}/api/discover")
+    print(f"Endpoint: {base_url}/api/discover")
     print(f"Lessons: {len(lessons)}")
     print(f"Output: {outdir}")
     print()
@@ -154,7 +153,12 @@ def main() -> int:
     for idx, lesson in enumerate(lessons, start=1):
         lesson_id = lesson["id"]
         print(f"[{idx}/{len(lessons)}] {lesson_id} - {lesson['title']}")
-        result = run_lesson(lesson, retries=args.retries)
+        original_base = BASE_URL
+        globals()["BASE_URL"] = base_url
+        try:
+            result = run_lesson(lesson, retries=args.retries)
+        finally:
+            globals()["BASE_URL"] = original_base
 
         path = outdir / f"{lesson_id}.json"
         path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
