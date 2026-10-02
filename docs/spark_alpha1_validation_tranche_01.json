@@ -1,0 +1,130 @@
+{
+  "tranche_id": "alpha1-validation-tranche-01",
+  "purpose": "Test whether SPARK DISCOVER surfaces at least one worthwhile, genuinely new, lesson-specific reasoning opportunity an educator would probably not otherwise notice or enact, while characterizing failure modes.",
+  "model": "gpt-5.6-luna",
+  "reasoning_effort": "low",
+  "prompt_version": "discover-0.2",
+  "schema_version": "spark-alpha1-0.3",
+  "primary_signal": "At least one surfaced opportunity is worthwhile + genuinely new + probably otherwise missed.",
+  "lessons": [
+    {
+      "id": "T01",
+      "title": "Investigating Genre: The Case of the Classic Detective Story",
+      "grade": "9-12",
+      "domain": "ELA",
+      "url": "https://www.readwritethink.org/classroom-resources/lesson-plans/investigating-genre-case-classic",
+      "status": "baseline-run-exists"
+    },
+    {
+      "id": "T02",
+      "title": "Leading to Great Places in the Middle School Classroom",
+      "grade": "6-8",
+      "domain": "ELA",
+      "url": "https://www.readwritethink.org/classroom-resources/lesson-plans/leading-great-places-middle",
+      "status": "baseline-run-exists"
+    },
+    {
+      "id": "T03",
+      "title": "Exploring Free Speech and Persuasion with Nothing But the Truth",
+      "grade": "6-8",
+      "domain": "ELA/Civics",
+      "url": "https://www.readwritethink.org/classroom-resources/lesson-plans/exploring-free-speech-persuasion",
+      "status": "baseline-run-exists"
+    },
+    {
+      "id": "T04",
+      "title": "Creating a Persuasive Podcast",
+      "grade": "6-10",
+      "domain": "ELA/Media",
+      "url": "https://www.readwritethink.org/classroom-resources/lesson-plans/creating-persuasive-podcast",
+      "status": "new"
+    },
+    {
+      "id": "T05",
+      "title": "Food Waste Audit",
+      "grade": "3-11",
+      "domain": "Environmental Science",
+      "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/food-waste-audit",
+      "status": "new"
+    },
+    {
+      "id": "T06",
+      "title": "From Farms to Phytoplankton",
+      "grade": "6-11",
+      "domain": "Environmental Science",
+      "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/from-farms-to-phytoplankton",
+      "status": "new"
+    },
+    {
+      "id": "T07",
+      "title": "How Stable is Your Food Web?",
+      "grade": "5-9",
+      "domain": "Ecology",
+      "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/how-stable-is-your-food-web",
+      "status": "new"
+    },
+    {
+      "id": "T08",
+      "title": "Make a Water Cycle Model",
+      "grade": "6-8",
+      "domain": "Earth Science",
+      "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/water-cycle-model",
+      "status": "new"
+    },
+    {
+      "id": "T09",
+      "title": "Oceanic Circulation: What Keeps the Ocean in Motion?",
+      "grade": "6-8",
+      "domain": "Ocean/Earth Science",
+      "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/oceanic-circulation",
+      "status": "new"
+    },
+    {
+      "id": "T10",
+      "title": "Build an Earthquake-Resistant House",
+      "grade": "6-8",
+      "domain": "Civil Engineering",
+      "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/earthquake-resistant-buildings",
+      "status": "new"
+    },
+    {
+      "id": "T11",
+      "title": "Design a Seeding Machine to Counteract Deforestation",
+      "grade": "6-8",
+      "domain": "Environmental Engineering",
+      "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/deforestation-seeding-machine-challenge",
+      "status": "new"
+    },
+    {
+      "id": "T12",
+      "title": "Documented Rights",
+      "grade": "Secondary adaptable",
+      "domain": "History/Civics",
+      "url": "https://www.archives.gov/exhibits/documented-rights/education/introduction.html",
+      "status": "new"
+    }
+  ],
+  "review": {
+    "moment_core": [
+      "worthwhile",
+      "newness",
+      "otherwise_missed",
+      "teacher_usability",
+      "consequentiality",
+      "distinctness"
+    ],
+    "run_level": [
+      "at_least_one_worthwhile_new_missed",
+      "overall_reaction",
+      "misunderstood_lesson",
+      "false_positives",
+      "missed_opportunities",
+      "overlap_or_redundancy",
+      "missing_materials_effect",
+      "existing_reasoning_richness",
+      "confidence",
+      "notes"
+    ]
+  },
+  "execution_rule": "Do not tune discover-0.2 lesson-by-lesson. Run the fixed tranche first; record failures rather than correcting them mid-tranche."
+}
