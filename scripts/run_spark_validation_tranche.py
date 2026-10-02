@@ -201,7 +201,7 @@ def main() -> int:
     base_url = args.base_url.rstrip("/")
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    lessons = manifest["lessons"]
+    lessons = list(manifest.get("lessons", [])) + list(manifest.get("replacements", []))
 
     if args.only:
         wanted = {x.strip() for x in args.only.split(",") if x.strip()}
