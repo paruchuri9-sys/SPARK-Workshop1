@@ -63,3 +63,20 @@ Do not average everything into a single score yet. First examine:
 - conditions under which SPARK adds little value.
 
 The tranche is complete when all 12 lessons have a DISCOVER record and run-level review.
+
+
+## Input-access failures and replacements
+
+The first batch established that T05-T11 could not be retrieved because ScienceBuddies returned HTTP 403 before DISCOVER ran. These records are retained as **INPUT_ACCESS_FAILURE** and excluded from SPARK quality analysis. They are not counted as model/prompt failures.
+
+| Replacement | Replaces | Lesson | Grade | Domain |
+|---|---|---|---|---|
+| T05R | T05 | [Ups and Downs](https://oceanservice.noaa.gov/education/tutorial_tides/lessons/ups_downs.html) | 9-12 | Earth Science/Oceanography |
+| T06R | T06 | [Feel the Heat](https://www.jpl.nasa.gov/edu/resources/lesson-plan/feel-the-heat/) | 4, 6-12 | Engineering/Physical Science |
+| T07R | T07 | [Touchdown](https://www.jpl.nasa.gov/edu/resources/lesson-plan/touchdown/) | 3-8 | Engineering |
+| T08R | T08 | [On Target](https://www.jpl.nasa.gov/edu/resources/lesson-plan/on-target/) | 6-12 | Engineering/Physics |
+| T09R | T09 | [Solar Oven](https://www.jpl.nasa.gov/edu/resources/lesson-plan/solar-oven/) | 6-8 | Engineering/Energy |
+| T10R | T10 | [Engineering Design Challenges: Heavy Lifting](https://www.nasa.gov/stem-content/engineering-design-challenges-heavy-lifting/) | 5-12 | Engineering/Physical Science |
+| T11R | T11 | [Water Filtration Challenge](https://www.jpl.nasa.gov/edu/resources/lesson-plan/water-filtration-challenge/) | 5-12 | Environmental Engineering |
+
+These replacement lessons preserve the cross-domain test purpose while avoiding provider-specific bot protection.
