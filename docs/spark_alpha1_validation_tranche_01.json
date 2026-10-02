@@ -45,7 +45,8 @@
       "grade": "3-11",
       "domain": "Environmental Science",
       "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/food-waste-audit",
-      "status": "new"
+      "status": "input-access-failure",
+      "exclude_from_quality_analysis": true
     },
     {
       "id": "T06",
@@ -53,7 +54,8 @@
       "grade": "6-11",
       "domain": "Environmental Science",
       "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/from-farms-to-phytoplankton",
-      "status": "new"
+      "status": "input-access-failure",
+      "exclude_from_quality_analysis": true
     },
     {
       "id": "T07",
@@ -61,7 +63,8 @@
       "grade": "5-9",
       "domain": "Ecology",
       "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/how-stable-is-your-food-web",
-      "status": "new"
+      "status": "input-access-failure",
+      "exclude_from_quality_analysis": true
     },
     {
       "id": "T08",
@@ -69,7 +72,8 @@
       "grade": "6-8",
       "domain": "Earth Science",
       "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/water-cycle-model",
-      "status": "new"
+      "status": "input-access-failure",
+      "exclude_from_quality_analysis": true
     },
     {
       "id": "T09",
@@ -77,7 +81,8 @@
       "grade": "6-8",
       "domain": "Ocean/Earth Science",
       "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/oceanic-circulation",
-      "status": "new"
+      "status": "input-access-failure",
+      "exclude_from_quality_analysis": true
     },
     {
       "id": "T10",
@@ -85,7 +90,8 @@
       "grade": "6-8",
       "domain": "Civil Engineering",
       "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/earthquake-resistant-buildings",
-      "status": "new"
+      "status": "input-access-failure",
+      "exclude_from_quality_analysis": true
     },
     {
       "id": "T11",
@@ -93,7 +99,8 @@
       "grade": "6-8",
       "domain": "Environmental Engineering",
       "url": "https://www.sciencebuddies.org/teacher-resources/lesson-plans/deforestation-seeding-machine-challenge",
-      "status": "new"
+      "status": "input-access-failure",
+      "exclude_from_quality_analysis": true
     },
     {
       "id": "T12",
@@ -126,5 +133,70 @@
       "notes"
     ]
   },
-  "execution_rule": "Do not tune discover-0.2 lesson-by-lesson. Run the fixed tranche first; record failures rather than correcting them mid-tranche."
+  "execution_rule": "Do not tune discover-0.2 lesson-by-lesson. Run the fixed tranche first; record failures rather than correcting them mid-tranche. Original T05-T11 are retained as INPUT_ACCESS_FAILURE and excluded from SPARK quality analysis; use T05R-T11R as replacements.",
+  "replacements": [
+    {
+      "id": "T05R",
+      "replaces": "T05",
+      "title": "Ups and Downs",
+      "grade": "9-12",
+      "domain": "Earth Science/Oceanography",
+      "url": "https://oceanservice.noaa.gov/education/tutorial_tides/lessons/ups_downs.html",
+      "status": "new"
+    },
+    {
+      "id": "T06R",
+      "replaces": "T06",
+      "title": "Feel the Heat",
+      "grade": "4, 6-12",
+      "domain": "Engineering/Physical Science",
+      "url": "https://www.jpl.nasa.gov/edu/resources/lesson-plan/feel-the-heat/",
+      "status": "new"
+    },
+    {
+      "id": "T07R",
+      "replaces": "T07",
+      "title": "Touchdown",
+      "grade": "3-8",
+      "domain": "Engineering",
+      "url": "https://www.jpl.nasa.gov/edu/resources/lesson-plan/touchdown/",
+      "status": "new"
+    },
+    {
+      "id": "T08R",
+      "replaces": "T08",
+      "title": "On Target",
+      "grade": "6-12",
+      "domain": "Engineering/Physics",
+      "url": "https://www.jpl.nasa.gov/edu/resources/lesson-plan/on-target/",
+      "status": "new"
+    },
+    {
+      "id": "T09R",
+      "replaces": "T09",
+      "title": "Solar Oven",
+      "grade": "6-8",
+      "domain": "Engineering/Energy",
+      "url": "https://www.jpl.nasa.gov/edu/resources/lesson-plan/solar-oven/",
+      "status": "new"
+    },
+    {
+      "id": "T10R",
+      "replaces": "T10",
+      "title": "Engineering Design Challenges: Heavy Lifting",
+      "grade": "5-12",
+      "domain": "Engineering/Physical Science",
+      "url": "https://www.nasa.gov/stem-content/engineering-design-challenges-heavy-lifting/",
+      "status": "new"
+    },
+    {
+      "id": "T11R",
+      "replaces": "T11",
+      "title": "Water Filtration Challenge",
+      "grade": "5-12",
+      "domain": "Environmental Engineering",
+      "url": "https://www.jpl.nasa.gov/edu/resources/lesson-plan/water-filtration-challenge/",
+      "status": "new"
+    }
+  ]
 }
