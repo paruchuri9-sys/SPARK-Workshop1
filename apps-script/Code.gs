@@ -4,16 +4,16 @@ const GROUP_IDS=['Owl','Fox','Raven','Dolphin','Octopus'];
 const STAGE_MINUTES=[4,6,5,8,7,5,6,8,10];
 const GH_ORIGIN='https://paruchuri9-sys.github.io';
 const GH_BASE=GH_ORIGIN+'/SPARK-Workshop1/';
-const SHEETS={participants:'ParticipantsV2',responses:'ResponsesV2',votes:'VotesV2',events:'EventsV2',group:'GroupDataV2'};
+const SHEETS={participants:'ParticipantsV2',responses:'ResponsesV2',votes:'VotesV2',events:'EventsV2',group:'GroupDataV2',mvpEvents:'MVPEventsV1'};
 const SETUP_CACHE_KEY='spark_setup_v26';
 const TIME_ZONE='America/Chicago';
 
 function doGet(e){
   ensureSetupCached_();
   const view=String((e&&e.parameter&&e.parameter.view)||'');
-  const target=view==='dashboard' ? GH_BASE+'dashboard.html?embedded=1' : GH_BASE+'?embedded=1';
+  const target=view==='dashboard' ? GH_BASE+'dashboard.html?embedded=1' : (view==='mvp' ? GH_BASE+'mvp.html?embedded=1' : GH_BASE+'?embedded=1');
   return HtmlService.createHtmlOutput(shellHtml_(target))
-    .setTitle(view==='dashboard'?'SPARK Workshop Dashboard':'SPARK Workshop 1')
+    .setTitle(view==='dashboard'?'SPARK Workshop Dashboard':(view==='mvp'?'SPARK Reasoning Opportunity Builder':'SPARK Workshop 1'))
     .addMetaTag('viewport','width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -52,6 +52,7 @@ function ensureSetup_(){
   defs[SHEETS.votes]=['timestamp','group','stage','participant_id','name','choice','confidence'];
   defs[SHEETS.events]=['timestamp','group','participant_id','event','stage','detail'];
   defs[SHEETS.group]=['group','key','json','updated'];
+  defs[SHEETS.mvpEvents]=['timestamp','session_id','event','json'];
   Object.keys(defs).forEach(n=>{let sh=ss.getSheetByName(n);if(!sh)sh=ss.insertSheet(n);if(!sh.getLastRow())sh.appendRow(defs[n]);});
   const gd=readGroupData_();
   GROUP_IDS.forEach(g=>{if(!gd[g]||gd[g]._stage===undefined){upsertGroup_(g,'_started',false);upsertGroup_(g,'_stage',1);upsertGroup_(g,'_deadline',null);upsertGroup_(g,'_prompt','');upsertGroup_(g,'_resetAt',0);}});
@@ -145,6 +146,23 @@ function handle_(q){
     GROUP_IDS.forEach(resetGroup_);
     return {ok:true};
   }
+  if(a==='mvpEvent'){
+    logMvpEvent_(q.sessionId||'',q.event||'',q.detail||{});
+    return {ok:true};
+  }
+  if(a==='mvpUncover'){
+    const source=String(q.sourceText||'').trim();
+    if(source.length<80)return {ok:false,error:'Activity text is too short to analyze.'};
+    const result=mvpUncover_(q);
+    logMvpEvent_(q.sessionId||'','uncover_complete',{count:(result.moments||[]).length,fileName:q.fileName||'',gradeCourse:q.gradeCourse||'',subject:q.subject||''});
+    return {ok:true,moments:result.moments||[]};
+  }
+  if(a==='mvpBuild'){
+    if(!q.selectedMoment)return {ok:false,error:'Select a consequential moment first.'};
+    const artifact=mvpBuild_(q);
+    logMvpEvent_(q.sessionId||'','build_complete',{momentId:q.selectedMoment.id||'',minutes:Number(q.minutes||0),format:q.format||''});
+    return {ok:true,artifact:artifact};
+  }
   return {ok:false,error:'Unknown action: '+a};
 }
 
@@ -200,3 +218,140 @@ function readGroupData_(){const v=SpreadsheetApp.getActiveSpreadsheet().getSheet
 function readGroupValue_(g,k){const gd=readGroupData_();return gd[g]?gd[g][k]:undefined;}
 function upsertGroup_(g,k,val){const sh=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.group),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(g)&&String(v[i][1])===String(k)){sh.getRange(i+1,3,1,2).setValues([[JSON.stringify(val),new Date()]]);return;}sh.appendRow([g,k,JSON.stringify(val),new Date()]);}
 function logEvent_(g,p,event,stage,detail){SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.events).appendRow([new Date(),g||'',p||'',event||'',stage||'',JSON.stringify(detail||{})]);}
+
+
+function logMvpEvent_(sessionId,event,detail){
+  try{
+    const sh=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.mvpEvents);
+    if(sh)sh.appendRow([new Date(),String(sessionId||''),String(event||''),JSON.stringify(detail||{})]);
+  }catch(e){}
+}
+
+function mvpUncover_(q){
+  const schema={
+    type:'object',additionalProperties:false,required:['moments'],
+    properties:{moments:{type:'array',minItems:3,maxItems:5,items:{
+      type:'object',additionalProperties:false,
+      required:['id','title','source_location','current_task','consequential_judgment','why_it_matters','reasoning_focus','options'],
+      properties:{
+        id:{type:'string'},
+        title:{type:'string'},
+        source_location:{type:'string'},
+        current_task:{type:'string'},
+        consequential_judgment:{type:'string'},
+        why_it_matters:{type:'string'},
+        reasoning_focus:{type:'string'},
+        options:{type:'array',minItems:3,maxItems:3,items:{
+          type:'object',additionalProperties:false,required:['minutes','label','description'],
+          properties:{minutes:{type:'integer',enum:[5,10,20]},label:{type:'string'},description:{type:'string'}}
+        }}
+      }
+    }}}
+  };
+  const instructions=[
+    'You are the SPARK consequential-moment generator for educators.',
+    'Analyze the existing instructional activity and identify 3 to 5 places where students encounter, or could naturally encounter, a consequential reasoning moment.',
+    'A consequential reasoning moment is a point where a student judgment could materially change depending on evidence, assumptions, uncertainty, competing explanations, tradeoffs, consequences, or new information.',
+    'Do not redesign the lesson. Do not provide generic critical-thinking activities. Do not duplicate reasoning already explicit in substantially the same form.',
+    'Ground every moment in a specific place in the supplied activity.',
+    'For each moment, create 5-, 10-, and 20-minute realizations of the SAME underlying reasoning opportunity, not three unrelated activities.',
+    'Preserve the teacher\'s learning objective and constraints when supplied.',
+    'Use plain teacher-facing language. Avoid pedagogical jargon unless it clarifies the reasoning focus.',
+    'Quality gate: reject candidates that merely add engagement, explanation, recall, or extra work without a meaningful student judgment.',
+    'Return only the structured result requested.'
+  ].join('\n');
+  return mvpOpenAIJson_(instructions,{
+    activity:q.sourceText,
+    file_name:q.fileName||'',
+    grade_or_course:q.gradeCourse||'',
+    subject:q.subject||'',
+    additional_time_minutes:Number(q.availableTime||10),
+    learning_objective:q.objective||'',
+    preserve:q.preserve||'',
+    avoid:q.avoid||''
+  },schema,'spark_consequential_moments');
+}
+
+function mvpBuild_(q){
+  const schema={
+    type:'object',additionalProperties:false,required:['teacher','student'],
+    properties:{
+      teacher:{type:'object',additionalProperties:false,required:['purpose','where_to_insert','preparation','facilitation','prompts','look_for'],properties:{
+        purpose:{type:'string'},
+        where_to_insert:{type:'string'},
+        preparation:{type:'array',items:{type:'string'}},
+        facilitation:{type:'array',items:{type:'string'}},
+        prompts:{type:'array',items:{type:'string'}},
+        look_for:{type:'array',items:{type:'string'}}
+      }},
+      student:{type:'object',additionalProperties:false,required:['instructions','evidence','questions'],properties:{
+        instructions:{type:'array',items:{type:'string'}},
+        evidence:{type:'array',items:{type:'string'}},
+        questions:{type:'array',items:{type:'string'}}
+      }}
+    }
+  };
+  const instructions=[
+    'You are the SPARK classroom-intervention builder.',
+    'Create a classroom-ready intervention for the educator-selected consequential moment.',
+    'The intervention must fit into the existing activity rather than replace it.',
+    'Treat the selected duration as a real constraint.',
+    'Preserve the selected consequential judgment. Give students an authentic opportunity to make, justify, compare, test, or revise a judgment.',
+    'Do not turn the intervention into generic reflection questions.',
+    'Use only information supported by the supplied activity unless the selected moment explicitly requires teacher-provided new evidence. If new evidence is needed but not supplied, state that need in teacher preparation and do not invent factual evidence.',
+    'Teacher prompts should be ready to say or display. Student view should contain only student-facing directions, evidence already available in the source, and questions.',
+    'Do not generate slides, standards alignment, a rubric, or additional formats.',
+    'Return only the structured result requested.'
+  ].join('\n');
+  return mvpOpenAIJson_(instructions,{
+    original_activity:q.sourceText||'',
+    file_name:q.fileName||'',
+    grade_or_course:q.gradeCourse||'',
+    subject:q.subject||'',
+    learning_objective:q.objective||'',
+    preserve:q.preserve||'',
+    avoid:q.avoid||'',
+    selected_moment:q.selectedMoment,
+    duration_minutes:Number(q.minutes||10),
+    activity_format:q.format||'discussion',
+    teacher_adjustment:q.adjustment||''
+  },schema,'spark_classroom_intervention');
+}
+
+function mvpOpenAIJson_(instructions,input,schema,name){
+  const props=PropertiesService.getScriptProperties();
+  const apiKey=props.getProperty('OPENAI_API_KEY');
+  if(!apiKey)throw new Error('SPARK is not configured yet. Add OPENAI_API_KEY to Apps Script Script Properties.');
+  const model=props.getProperty('SPARK_MODEL')||'gpt-6-luna';
+  const payload={
+    model:model,
+    instructions:instructions,
+    input:JSON.stringify(input),
+    text:{format:{type:'json_schema',name:name,strict:true,schema:schema}}
+  };
+  const res=UrlFetchApp.fetch('https://api.openai.com/v1/responses',{
+    method:'post',
+    contentType:'application/json',
+    headers:{Authorization:'Bearer '+apiKey},
+    payload:JSON.stringify(payload),
+    muteHttpExceptions:true
+  });
+  const code=res.getResponseCode(),body=res.getContentText();
+  if(code<200||code>=300){
+    let message='AI request failed ('+code+').';
+    try{const j=JSON.parse(body);message=(j.error&&j.error.message)||message;}catch(e){}
+    throw new Error(message);
+  }
+  const j=JSON.parse(body);
+  let text='';
+  if(j.output_text)text=j.output_text;
+  if(!text&&Array.isArray(j.output)){
+    j.output.forEach(function(item){
+      (item.content||[]).forEach(function(part){
+        if(part&&typeof part.text==='string')text+=part.text;
+      });
+    });
+  }
+  if(!text)throw new Error('AI returned no usable structured output.');
+  try{return JSON.parse(text);}catch(e){throw new Error('AI returned invalid structured output.');}
+}
