@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#582C83" />
+  <title>SPARK · Reasoning Opportunity Builder</title>
+  <link rel="stylesheet" href="mvp.css?v=1" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
+  <script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brandmark">SPARK</div>
+  <div>
+    <div class="eyebrow">Reasoning-Integrated Education</div>
+    <h1>Reasoning Opportunity Builder</h1>
+  </div>
+  <div class="header-right"><span class="badge">MVP v0.2</span></div>
+</header>
+
+<main class="shell">
+  <nav class="steps" aria-label="Progress">
+    <button class="step active" data-step="1"><span>1</span> Bring activity</button>
+    <button class="step" data-step="2" disabled><span>2</span> Choose moment</button>
+    <button class="step" data-step="3" disabled><span>3</span> Build</button>
+  </nav>
+
+  <section id="page1" class="page">
+    <div class="card hero">
+      <div class="eyebrow purple">Start with what you already teach</div>
+      <h2>Find reasoning opportunities in an existing activity</h2>
+      <p>Upload or paste something you already use. SPARK will look for places where students could make, test, or revise an important judgment.</p>
+    </div>
+
+    <div class="card">
+      <label for="activityFile">Upload activity</label>
+      <input id="activityFile" type="file" accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+      <p id="fileStatus" class="muted">TXT, MD, PDF, or DOCX. You can also paste below.</p>
+
+      <label for="activityText">Or paste the activity</label>
+      <textarea id="activityText" rows="12" placeholder="Paste the assignment, lesson, worksheet, scenario, discussion prompt, or activity here..."></textarea>
+
+      <div class="grid two">
+        <label>Grade level or course
+          <input id="gradeCourse" placeholder="e.g., Grade 8 U.S. History" />
+        </label>
+        <label>Subject
+          <input id="subject" placeholder="e.g., Social Studies" />
+        </label>
+      </div>
+
+      <fieldset>
+        <legend>Additional class time available</legend>
+        <div class="segmented" id="timeChoices">
+          <button type="button" data-minutes="5">5 min</button>
+          <button type="button" data-minutes="10" class="selected">10 min</button>
+          <button type="button" data-minutes="20">20 min</button>
+          <button type="button" data-minutes="30">30+ min</button>
+        </div>
+      </fieldset>
+
+      <details>
+        <summary>Add context <span class="muted">(optional)</span></summary>
+        <label>Learning objective
+          <input id="objective" placeholder="What should students learn or accomplish?" />
+        </label>
+        <div class="grid two">
+          <label>Preserve
+            <input id="preserve" placeholder="What should SPARK not disrupt?" />
+          </label>
+          <label>Avoid
+            <input id="avoid" placeholder="Anything SPARK should avoid?" />
+          </label>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button id="findBtn" class="primary">Find opportunities</button>
+      </div>
+      <div id="page1Error" class="error hidden"></div>
+    </div>
+  </section>
+
+  <section id="page2" class="page hidden">
+    <div class="page-heading">
+      <div>
+        <div class="eyebrow purple">SPARK uncovered</div>
+        <h2 id="momentsHeading">Consequential moments worth considering</h2>
+        <p>Choose a moment that is worth the class time for your students. These are suggestions, not required changes.</p>
+      </div>
+      <button class="ghost" data-back="1">← Change activity</button>
+    </div>
+
+    <div id="momentsList"></div>
+
+    <div id="selectionBar" class="selection-bar hidden">
+      <div><strong id="selectionSummary">1 opportunity selected</strong><div id="selectionDetail" class="muted"></div></div>
+      <button id="buildBtn" class="primary">Create activity</button>
+    </div>
+    <div id="page2Error" class="error hidden"></div>
+  </section>
+
+  <section id="page3" class="page hidden">
+    <div class="page-heading">
+      <div>
+        <div class="eyebrow purple">Classroom-ready intervention</div>
+        <h2>Your SPARK activity</h2>
+      </div>
+      <button class="ghost" data-back="2">← Choose another moment</button>
+    </div>
+
+    <div id="provenance" class="card compact provenance"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="teacher">Teacher View</button>
+      <button class="tab" data-tab="student">Student View</button>
+    </div>
+
+    <article id="teacherView" class="card artifact"></article>
+    <article id="studentView" class="card artifact hidden"></article>
+
+    <div class="actions split">
+      <button id="editBtn" class="ghost">Edit activity</button>
+      <button id="restartBtn" class="secondary-btn">Try another activity</button>
+    </div>
+    <div id="page3Error" class="error hidden"></div>
+  </section>
+
+  <div id="busy" class="busy hidden" aria-live="polite">
+    <div class="spinner"></div>
+    <strong id="busyTitle">SPARK is analyzing the activity…</strong>
+    <span id="busyText">Looking for moments where student judgment could meaningfully change.</span>
+  </div>
+</main>
+
+<script src="config.js?v=3"></script>
+<script src="bridge.js?v=5"></script>
+<script src="mvp.js?v=1"></script>
+</body>
+</html>
