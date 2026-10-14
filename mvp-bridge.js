@@ -7,8 +7,9 @@
   const STORAGE_KEY='spark_mvp_backend_v1';
   const supplied=params.get('backend')||'';
   if(supplied){try{localStorage.setItem(STORAGE_KEY,supplied)}catch(e){}}
+  const DEFAULT_BACKEND='https://script.google.com/macros/s/AKfycbwNwTbdbAeKh1Cj3-WuJ0vXAf65ydps_ytJlLLhlnTEBPBkghX0hj85B5iU7egOlq2I/exec';
   let backend=supplied;
-  if(!backend){try{backend=localStorage.getItem(STORAGE_KEY)||''}catch(e){}}
+  if(!backend){try{backend=localStorage.getItem(STORAGE_KEY)||DEFAULT_BACKEND}catch(e){backend=DEFAULT_BACKEND}}
   const TIMEOUT_MS=90000;
   const pending=new Map();
   const queue=[];
