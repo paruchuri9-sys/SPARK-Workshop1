@@ -283,12 +283,13 @@ function updateSelection(){
   $('#selectionBar').classList.toggle('hidden',chosen.length===0);
   $('#selectionSummary').textContent=chosen.length+' opportunities selected';
   $('#selectionDetail').textContent='Estimated '+total+' minutes · '+chosen.map(s=>s.moment.title).join('; ');
-  $('#buildBtn').disabled=chosen.length===0;
+  $('#buildBtn').disabled=chosen.length===0||total>state.availableTime;
+  err('#page2Error',total>state.availableTime?'Selected activities total '+total+' minutes, exceeding the '+state.availableTime+'-minute budget. Shorten a selection or change the available time on Page 1.':'');
 }
 $$('.format-btn').forEach(b=>b.addEventListener('click',()=>{$$('.format-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');log('format_selected',{format:b.dataset.format});}));
 
 $('#buildBtn').addEventListener('click',async()=>{
-  if(!Object.keys(state.selections).length)return;
+  if(!Object.keys(state.selections).length||Object.values(state.selections).reduce((n,s)=>n+s.minutes,0)>state.availableTime)return;
   err('#page2Error','');
   busy('SPARK is building the activity…','Keeping the selected consequential judgment and fitting it to the time you chose.');
   try{
