@@ -92,7 +92,7 @@ function htmlToText_(html){
 function mvpUncover_(q){
   const schema={
     type:'object',additionalProperties:false,required:['moments'],
-    properties:{moments:{type:'array',minItems:3,maxItems:5,items:{
+    properties:{moments:{type:'array',minItems:1,maxItems:5,items:{
       type:'object',additionalProperties:false,
       required:['id','title','source_location','current_task','consequential_judgment','why_it_matters','reasoning_focus','construct_label','construct_explanation','coverage_status','coverage_rationale','added_value','options'],
       properties:{
@@ -109,7 +109,7 @@ function mvpUncover_(q){
   };
   const instructions=[
     'You are the SPARK consequential-moment generator for educators.',
-    'Find up to five substantial consequential reasoning moments, including moments already present when needed to represent an already reasoning-rich lesson. Do not force novelty or force five distinct improvements.',
+    'Find one to five substantial consequential reasoning moments, including moments already present when needed to represent an already reasoning-rich lesson. Do not force novelty or force five distinct improvements.',
     'A consequential reasoning moment is a point where a student judgment could materially change depending on evidence, assumptions, uncertainty, competing explanations, tradeoffs, consequences, or new information.',
     'Classify every moment as uncovered (substantially absent from original), strengthened (original asks for reasoning but a consequential operation can be added), or already_present (the proposed reasoning is substantially present). The classification is a tentative, source-grounded interpretation, not verified teacher novelty.',
     'For each candidate name one recognizable reasoning construct, explain it in ordinary language, provide concrete source evidence for its coverage status, and state the specific instructional increment (or explicitly say no material increment).',
@@ -192,7 +192,7 @@ function recordEvent_(q){
   try{
     const props=PropertiesService.getScriptProperties();
     const id=props.getProperty('SPARK_EVENT_SHEET_ID');
-    if(!id)return;
+    if(!id){console.log('SPARK_EVENT '+JSON.stringify({sessionId:q.sessionId,event:q.event,designVersion:SPARK_DESIGN_VERSION,reasonerVersion:SPARK_REASONER_VERSION,metadata:q.detail||{}}));return;}
     const lock=LockService.getScriptLock();lock.waitLock(3000);
     try{
       const book=SpreadsheetApp.openById(id);
