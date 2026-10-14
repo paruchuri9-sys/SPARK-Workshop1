@@ -298,10 +298,10 @@ function renderArtifact(){
   $('#teacherView').innerHTML=section('Purpose',a.teacher?.purpose)+section('Where to insert it',a.teacher?.where_to_insert)+section('Preparation / materials',a.teacher?.preparation)+section('Facilitation',a.teacher?.facilitation)+section('Exact prompts',a.teacher?.prompts)+section('What to look for',a.teacher?.look_for);
   $('#studentView').innerHTML=section('Student activity',a.student?.instructions)+section('Evidence / information',a.student?.evidence)+section('Questions',a.student?.questions);
 }
-$('.tab').forEach(t=>t.addEventListener('click',()=>{$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');$('#teacherView').classList.toggle('hidden',t.dataset.tab!=='teacher');$('#studentView').classList.toggle('hidden',t.dataset.tab!=='student')}));
+$$('.tab').forEach(t=>t.addEventListener('click',()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');$('#teacherView').classList.toggle('hidden',t.dataset.tab!=='teacher');$('#studentView').classList.toggle('hidden',t.dataset.tab!=='student')}));
 $('#editBtn').addEventListener('click',()=>{const v=$('.tab.active')?.dataset.tab==='student'?$('#studentView'):$('#teacherView');const editing=v.getAttribute('contenteditable')==='true';v.setAttribute('contenteditable',editing?'false':'true');$('#editBtn').textContent=editing?'Edit activity':'Finish editing';if(editing)log('artifact_edited',{view:v.id})});
 $('#restartBtn').addEventListener('click',()=>{location.reload()});
-$('[data-back]').forEach(b=>b.addEventListener('click',()=>showPage(Number(b.dataset.back))));
+$$('[data-back]').forEach(b=>b.addEventListener('click',()=>showPage(Number(b.dataset.back))));
 })();
 </script>
 </body>
