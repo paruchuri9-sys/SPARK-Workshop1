@@ -1,4 +1,7 @@
 /** SPARK MVP v0.2 standalone backend */
+const SPARK_DESIGN_VERSION='0.3.0';
+const SPARK_REASONER_VERSION='0.3.0';
+const SPARK_RELEASE='2026-10-14-rc1';
 const GH_ORIGIN='https://paruchuri9-sys.github.io';
 const GH_MVP=GH_ORIGIN+'/SPARK-Workshop1/mvp.html';
 
@@ -10,20 +13,24 @@ function doGet() {
 
 function api(action,payload){
   const q=payload||{};
-  if(action==='health') return {ok:true,service:'SPARK MVP v0.2'};
-  if(action==='mvpEvent') return {ok:true};
+  if(action==='health') return {ok:true,designVersion:SPARK_DESIGN_VERSION,reasonerVersion:SPARK_REASONER_VERSION,release:SPARK_RELEASE};
+  if(action==='mvpEvent'){recordEvent_(q);return {ok:true};}
   if(action==='mvpUncover'){
     const resolved=resolveSource_(q);
     q.sourceText=resolved.text;
     if(!q.fileName) q.fileName=resolved.label;
-    return {ok:true,moments:mvpUncover_(q).moments||[]};
+    const moments=mvpUncover_(q).moments||[];
+    recordEvent_({sessionId:q.sessionId,event:'uncover_completed',detail:{count:moments.length,moments:moments.map(m=>({id:m.id,classification:m.coverage_status,construct:m.construct_label}))}});
+    return {ok:true,moments:moments,reasonerVersion:SPARK_REASONER_VERSION};
   }
   if(action==='mvpBuild'){
-    if(!q.selectedMoment) throw new Error('Select a consequential moment first.');
+    if(!Array.isArray(q.selections)||!q.selections.length) throw new Error('Select at least one consequential moment.');
     const resolved=resolveSource_(q);
     q.sourceText=resolved.text;
     if(!q.fileName) q.fileName=resolved.label;
-    return {ok:true,artifact:mvpBuild_(q)};
+    const artifact=mvpBuild_(q);
+    recordEvent_({sessionId:q.sessionId,event:'build_completed',detail:{ids:q.selections.map(s=>s.moment.id),totalMinutes:q.selections.reduce((n,s)=>n+Number(s.minutes||0),0)}});
+    return {ok:true,artifact:artifact};
   }
   throw new Error('Unknown action: '+action);
 }
@@ -85,12 +92,14 @@ function htmlToText_(html){
 function mvpUncover_(q){
   const schema={
     type:'object',additionalProperties:false,required:['moments'],
-    properties:{moments:{type:'array',minItems:3,maxItems:5,items:{
+    properties:{moments:{type:'array',minItems:1,maxItems:5,items:{
       type:'object',additionalProperties:false,
-      required:['id','title','source_location','current_task','consequential_judgment','why_it_matters','reasoning_focus','options'],
+      required:['id','title','source_location','current_task','consequential_judgment','why_it_matters','reasoning_focus','construct_label','construct_explanation','coverage_status','coverage_rationale','added_value','options'],
       properties:{
         id:{type:'string'},title:{type:'string'},source_location:{type:'string'},current_task:{type:'string'},
-        consequential_judgment:{type:'string'},why_it_matters:{type:'string'},reasoning_focus:{type:'string'},
+        consequential_judgment:{type:'string'},why_it_matters:{type:'string'},reasoning_focus:{type:'string'},construct_label:{type:'string'},construct_explanation:{type:'string'},
+        coverage_status:{type:'string',enum:['uncovered','strengthened','already_present']},
+        coverage_rationale:{type:'string'},added_value:{type:'string'},
         options:{type:'array',minItems:4,maxItems:4,items:{
           type:'object',additionalProperties:false,required:['minutes','label','description'],
           properties:{minutes:{type:'integer',enum:[5,10,20,30]},label:{type:'string'},description:{type:'string'}}
@@ -100,9 +109,11 @@ function mvpUncover_(q){
   };
   const instructions=[
     'You are the SPARK consequential-moment generator for educators.',
-    'Identify 3 to 5 places in the existing activity where students encounter, or could naturally encounter, a consequential reasoning moment.',
+    'Find one to five substantial consequential reasoning moments, including moments already present when needed to represent an already reasoning-rich lesson. Do not force novelty or force five distinct improvements.',
     'A consequential reasoning moment is a point where a student judgment could materially change depending on evidence, assumptions, uncertainty, competing explanations, tradeoffs, consequences, or new information.',
-    'Do not redesign the lesson. Do not add generic critical-thinking activities. Do not duplicate reasoning already explicit in substantially the same form.',
+    'Classify every moment as uncovered (substantially absent from original), strengthened (original asks for reasoning but a consequential operation can be added), or already_present (the proposed reasoning is substantially present). The classification is a tentative, source-grounded interpretation, not verified teacher novelty.',
+    'For each candidate name one recognizable reasoning construct, explain it in ordinary language, provide concrete source evidence for its coverage status, and state the specific instructional increment (or explicitly say no material increment).',
+    'Do not rebrand tasks already present as new. Do not add generic critical-thinking activities.',
     'Ground every moment in a specific place in the source activity.',
     'For each moment, create 5-, 10-, 20-, and 30-minute realizations of the SAME underlying reasoning opportunity.',
     'Preserve the supplied objective and constraints.',
@@ -130,18 +141,18 @@ function mvpBuild_(q){
   };
   const instructions=[
     'You are the SPARK classroom-intervention builder.',
-    'Create a classroom-ready intervention for the selected consequential moment.',
+    'Create ONE coherent classroom-ready intervention integrating all teacher-selected consequential moments, not a concatenation of unrelated mini-lessons.',
     'Fit it into the existing activity rather than replacing the activity.',
-    'Treat the selected duration as a real constraint.',
-    'Preserve the consequential judgment and give students an authentic opportunity to make, justify, compare, test, or revise a judgment.',
+    'Treat total duration as a strict cap. Use per-moment durations as allocation targets. If moments overlap, consolidate shared activities and explicitly preserve each different reasoning construct.',
+    'Preserve the consequential judgment of each selected moment and give students authentic opportunities to make, justify, test, qualify or revise judgments. Explain what is newly strengthened relative to the source, without fabricating novelty.',
     'Do not invent factual evidence. If new evidence is required but not supplied, state that need in teacher preparation.',
     'Teacher prompts should be ready to say or display. Student view should contain only student-facing material.',
     'Do not generate slides, standards alignment, rubrics, or extra formats.'
   ].join('\n');
   return openAIJson_(instructions,{
     original_activity:q.sourceText||'',file_name:q.fileName||'',grade_or_course:q.gradeCourse||'',subject:q.subject||'',
-    learning_objective:q.objective||'',preserve:q.preserve||'',avoid:q.avoid||'',selected_moment:q.selectedMoment,
-    duration_minutes:Number(q.minutes||10),activity_format:q.format||'discussion',teacher_adjustment:q.adjustment||''
+    learning_objective:q.objective||'',preserve:q.preserve||'',avoid:q.avoid||'',selections:q.selections,
+    duration_minutes:q.selections.reduce(function(n,s){return n+Number(s.minutes||0);},0),activity_format:q.format||'discussion'
   },schema,'spark_classroom_intervention');
 }
 
@@ -175,4 +186,19 @@ function openAIJson_(instructions,input,schema,name){
   }
   if(!out) throw new Error('Model returned no structured output.');
   try{return JSON.parse(out);}catch(e){throw new Error('Model returned invalid structured output.');}
+}
+function recordEvent_(q){
+  // Privacy-preserving event metadata only. No lesson text or student data.
+  try{
+    const props=PropertiesService.getScriptProperties();
+    const id=props.getProperty('SPARK_EVENT_SHEET_ID');
+    if(!id){console.log('SPARK_EVENT '+JSON.stringify({sessionId:q.sessionId,event:q.event,designVersion:SPARK_DESIGN_VERSION,reasonerVersion:SPARK_REASONER_VERSION,metadata:q.detail||{}}));return;}
+    const lock=LockService.getScriptLock();lock.waitLock(3000);
+    try{
+      const book=SpreadsheetApp.openById(id);
+      const sheet=book.getSheetByName('MVPEventsV1')||book.insertSheet('MVPEventsV1');
+      if(sheet.getLastRow()===0)sheet.appendRow(['timestamp','session_id','event','design_version','reasoner_version','release','metadata_json']);
+      sheet.appendRow([new Date(),String(q.sessionId||''),String(q.event||''),SPARK_DESIGN_VERSION,SPARK_REASONER_VERSION,SPARK_RELEASE,JSON.stringify(q.detail||{})]);
+    }finally{lock.releaseLock();}
+  }catch(err){console.error('MVP event write failed: '+err.message);}
 }
