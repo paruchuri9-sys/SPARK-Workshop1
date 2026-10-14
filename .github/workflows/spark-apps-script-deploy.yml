@@ -1,0 +1,54 @@
+name: SPARK Apps Script controlled deploy
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        type: choice
+        required: true
+        options: [main, spark-mvp-design-0.3-reasoner-0.3]
+      release_note:
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: spark-apps-script-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: spark-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-spark-release.mjs
+      - run: npm install --global @google/clasp@3
+      - name: Prepare secure clasp mapping
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SPARK_SCRIPT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLASPRC_JSON"
+          test -n "$SCRIPT_ID"
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          mkdir -p .spark-clasp
+          cp apps-script-mvp/Code.gs apps-script-mvp/Index.html apps-script-mvp/appsscript.json .spark-clasp/
+          node -e "require('fs').writeFileSync('.spark-clasp/.clasp.json',JSON.stringify({scriptId:process.env.SCRIPT_ID,rootDir:'.'}))"
+      - name: Deploy to existing URL
+        working-directory: .spark-clasp
+        env:
+          DEPLOYMENT_ID: ${{ secrets.SPARK_DEPLOYMENT_ID }}
+          NOTE: ${{ inputs.release_note }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOYMENT_ID"
+          clasp push --force
+          clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "$NOTE"
+          clasp deployments
