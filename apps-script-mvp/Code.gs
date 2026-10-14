@@ -33,15 +33,73 @@ function api(action,payload){
   if(action==='health') return {ok:true,service:'SPARK MVP v0.2'};
   if(action==='mvpEvent') return {ok:true};
   if(action==='mvpUncover'){
-    const source=String(q.sourceText||'').trim();
-    if(source.length<80) throw new Error('Activity text is too short to analyze.');
+    const resolved=resolveSource_(q);
+    q.sourceText=resolved.text;
+    if(!q.fileName) q.fileName=resolved.label;
     return {ok:true,moments:mvpUncover_(q).moments||[]};
   }
   if(action==='mvpBuild'){
     if(!q.selectedMoment) throw new Error('Select a consequential moment first.');
+    const resolved=resolveSource_(q);
+    q.sourceText=resolved.text;
+    if(!q.fileName) q.fileName=resolved.label;
     return {ok:true,artifact:mvpBuild_(q)};
   }
   throw new Error('Unknown action: '+action);
+}
+
+
+function resolveSource_(q){
+  const pasted=String(q.sourceText||'').trim();
+  if(pasted.length>=80) return {text:pasted,label:String(q.fileName||'Pasted activity')};
+
+  const url=String(q.sourceUrl||'').trim();
+  if(!url) throw new Error('Upload or paste the activity, or provide a public lesson URL.');
+  if(!/^https?:\/\//i.test(url)) throw new Error('Lesson URL must begin with http:// or https://.');
+
+  const res=UrlFetchApp.fetch(url,{
+    followRedirects:true,
+    muteHttpExceptions:true,
+    headers:{'User-Agent':'Mozilla/5.0 SPARK-MVP/0.2'}
+  });
+  const code=res.getResponseCode();
+  if(code<200||code>=300) throw new Error('Could not retrieve that lesson URL (HTTP '+code+').');
+
+  const headers=res.getHeaders();
+  const contentType=String(headers['Content-Type']||headers['content-type']||'').toLowerCase();
+  if(contentType.indexOf('pdf')>=0) throw new Error('PDF links are not supported by URL yet. Download the PDF and upload it instead.');
+  if(contentType && contentType.indexOf('html')<0 && contentType.indexOf('text')<0){
+    throw new Error('That URL is not a readable public web page. Upload the lesson file instead.');
+  }
+
+  let text=res.getContentText();
+  if(contentType.indexOf('html')>=0 || /<html[\s>]/i.test(text)){
+    text=htmlToText_(text);
+  }
+  text=String(text||'').replace(/\s+/g,' ').trim();
+  if(text.length<80) throw new Error('The public page did not expose enough lesson text to analyze. Paste the lesson text or upload the file instead.');
+  if(text.length>120000) text=text.slice(0,120000);
+  return {text:text,label:url};
+}
+
+function htmlToText_(html){
+  return String(html||'')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ')
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi,' ')
+    .replace(/<br\s*\/?>/gi,'\n')
+    .replace(/<\/(p|div|li|section|article|h[1-6]|tr)>/gi,'\n')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/&nbsp;/gi,' ')
+    .replace(/&amp;/gi,'&')
+    .replace(/&lt;/gi,'<')
+    .replace(/&gt;/gi,'>')
+    .replace(/&quot;/gi,'"')
+    .replace(/&#39;|&apos;/gi,"'")
+    .replace(/&#(\d+);/g,function(_,n){return String.fromCharCode(Number(n));})
+    .replace(/[ \t]+/g,' ')
+    .replace(/\n\s*\n+/g,'\n')
+    .trim();
 }
 
 function mvpUncover_(q){
