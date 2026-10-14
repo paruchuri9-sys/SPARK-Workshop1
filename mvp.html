@@ -95,7 +95,17 @@
     <div id="momentsList"></div>
 
     <div id="selectionBar" class="selection-bar hidden">
-      <div><strong id="selectionSummary">1 opportunity selected</strong><div id="selectionDetail" class="muted"></div></div>
+      <div>
+        <strong id="selectionSummary">1 opportunity selected</strong>
+        <div id="selectionDetail" class="muted"></div>
+        <div class="format-row" aria-label="Activity format">
+          <span class="muted">Format:</span>
+          <button type="button" class="format-btn selected" data-format="discussion">Discussion</button>
+          <button type="button" class="format-btn" data-format="written">Written</button>
+          <button type="button" class="format-btn" data-format="pairs_groups">Pairs / groups</button>
+          <button type="button" class="format-btn" data-format="whole_class">Whole class</button>
+        </div>
+      </div>
       <button id="buildBtn" class="primary">Create activity</button>
     </div>
     <div id="page2Error" class="error hidden"></div>
