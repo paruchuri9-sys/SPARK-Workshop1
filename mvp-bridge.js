@@ -4,7 +4,7 @@
   'use strict';
   const params=new URLSearchParams(location.search);
   const embedded=params.get('embedded')==='1' && window.parent!==window;
-  const STORAGE_KEY='spark_mvp_backend_v1';
+  const STORAGE_KEY='spark_mvp_backend_v2';
   const supplied=params.get('backend')||'';
   if(supplied){try{localStorage.setItem(STORAGE_KEY,supplied)}catch(e){}}
   const DEFAULT_BACKEND='https://script.google.com/macros/s/AKfycbyB05iGL0akpTF5l-vq9aeCdCLlOMSFgegmXYsmyaqSUvclHtnzM-otGPY4tKOdtv7c/exec';
