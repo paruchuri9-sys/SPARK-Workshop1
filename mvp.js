@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={sourceText:'',fileName:'',gradeCourse:'',subject:'',availableTime:10,objective:'',preserve:'',avoid:'',moments:[],selected:null,artifact:null,sessionId:'mvp_'+Date.now()+'_'+Math.random().toString(36).slice(2,8)};
+const state={sourceText:'',sourceUrl:'',fileName:'',gradeCourse:'',subject:'',availableTime:10,objective:'',preserve:'',avoid:'',moments:[],selected:null,artifact:null,sessionId:'mvp_'+Date.now()+'_'+Math.random().toString(36).slice(2,8)};
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function nl(s){return esc(s).replace(/\n/g,'<br>')}
 function busy(title,text){$('#busyTitle').textContent=title;$('#busyText').textContent=text||'';$('#busy').classList.remove('hidden')}
@@ -38,17 +38,19 @@ $('#activityFile').addEventListener('change',async e=>{try{const f=e.target.file
 $('#findBtn').addEventListener('click',async()=>{
   err('#page1Error','');
   state.sourceText=$('#activityText').value.trim();
+  state.sourceUrl=$('#activityUrl').value.trim();
   state.gradeCourse=$('#gradeCourse').value.trim();
   state.subject=$('#subject').value.trim();
   state.availableTime=selectedTime();
   state.objective=$('#objective').value.trim();
   state.preserve=$('#preserve').value.trim();
   state.avoid=$('#avoid').value.trim();
-  if(state.sourceText.length<80)return err('#page1Error','Please upload or paste enough of the activity for SPARK to analyze.');
+  if(state.sourceText.length<80&&!state.sourceUrl)return err('#page1Error','Upload or paste the activity, or provide a public lesson URL.');
+  if(state.sourceUrl&&!/^https?:\/\//i.test(state.sourceUrl))return err('#page1Error','Enter a full public URL beginning with http:// or https://.');
   if(!state.gradeCourse)return err('#page1Error','Add the grade level or course.');
   busy('SPARK is finding consequential moments…','Looking for places where student judgment could meaningfully change.');
   try{
-    const r=await call('mvpUncover',{sessionId:state.sessionId,sourceText:state.sourceText,fileName:state.fileName,gradeCourse:state.gradeCourse,subject:state.subject,availableTime:state.availableTime,objective:state.objective,preserve:state.preserve,avoid:state.avoid});
+    const r=await call('mvpUncover',{sessionId:state.sessionId,sourceText:state.sourceText,sourceUrl:state.sourceUrl,fileName:state.fileName,gradeCourse:state.gradeCourse,subject:state.subject,availableTime:state.availableTime,objective:state.objective,preserve:state.preserve,avoid:state.avoid});
     state.moments=r.moments||[];
     if(!state.moments.length)throw new Error('SPARK did not find a strong enough opportunity in this activity.');
     state.selected=null;renderMoments();showPage(2);log('moments_shown',{count:state.moments.length});
@@ -99,7 +101,7 @@ $('#buildBtn').addEventListener('click',async()=>{
   err('#page2Error','');
   busy('SPARK is building the activity…','Keeping the selected consequential judgment and fitting it to the time you chose.');
   try{
-    const r=await call('mvpBuild',{sessionId:state.sessionId,sourceText:state.sourceText,fileName:state.fileName,gradeCourse:state.gradeCourse,subject:state.subject,objective:state.objective,preserve:state.preserve,avoid:state.avoid,selectedMoment:state.selected.moment,minutes:state.selected.minutes,format:state.selected.format,adjustment:state.selected.adjustment});
+    const r=await call('mvpBuild',{sessionId:state.sessionId,sourceText:state.sourceText,sourceUrl:state.sourceUrl,fileName:state.fileName,gradeCourse:state.gradeCourse,subject:state.subject,objective:state.objective,preserve:state.preserve,avoid:state.avoid,selectedMoment:state.selected.moment,minutes:state.selected.minutes,format:state.selected.format,adjustment:state.selected.adjustment});
     state.artifact=r.artifact;renderArtifact();showPage(3);log('artifact_generated',{momentId:state.selected.moment.id,minutes:state.selected.minutes});
   }catch(ex){err('#page2Error',ex.message||String(ex))}finally{unbusy()}
 });
