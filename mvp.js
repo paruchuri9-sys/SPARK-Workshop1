@@ -92,7 +92,7 @@ function updateSelection(){
   bar.classList.remove('hidden');$('#selectionSummary').textContent='1 opportunity selected';$('#selectionDetail').textContent=state.selected.moment.title+' · about '+state.selected.minutes+' minutes';
 }
 
-$('.format-btn').forEach(b=>b.addEventListener('click',()=>{$('.format-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');if(state.selected)state.selected.format=b.dataset.format;log('format_selected',{format:b.dataset.format});}));
+$$('.format-btn').forEach(b=>b.addEventListener('click',()=>{$$('.format-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');if(state.selected)state.selected.format=b.dataset.format;log('format_selected',{format:b.dataset.format});}));
 
 $('#buildBtn').addEventListener('click',async()=>{
   if(!state.selected)return;
