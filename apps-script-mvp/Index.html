@@ -185,7 +185,7 @@ details{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-
 <script>
 (function(){
 'use strict';
-const $=s=>document.querySelector(s), $=s=>[...document.querySelectorAll(s)];
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const state={sourceText:'',sourceUrl:'',fileName:'',gradeCourse:'',subject:'',availableTime:10,objective:'',preserve:'',avoid:'',moments:[],selected:null,artifact:null,sessionId:'mvp_'+Date.now()+'_'+Math.random().toString(36).slice(2,8)};
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function nl(s){return esc(s).replace(/\n/g,'<br>')}
@@ -194,9 +194,9 @@ function unbusy(){$('#busy').classList.add('hidden')}
 function err(id,msg){const el=$(id);el.textContent=msg||'';el.classList.toggle('hidden',!msg)}
 function call(action,payload){return new Promise((resolve,reject)=>{try{google.script.run.withSuccessHandler(r=>r&&r.ok===false?reject(new Error(r.error||'Request failed')):resolve(r)).withFailureHandler(e=>reject(new Error(e?.message||String(e)))).api(action,payload||{})}catch(e){reject(e)}})}
 function log(event,detail){call('mvpEvent',{sessionId:state.sessionId,event,detail:detail||{}}).catch(()=>{})}
-function showPage(n){$('.page').forEach((p,i)=>p.classList.toggle('hidden',i!==n-1));$('.step').forEach((s,i)=>{s.classList.toggle('active',i===n-1);if(i<n)s.disabled=false});window.scrollTo({top:0,behavior:'smooth'})}
+function showPage(n){$$('.page').forEach((p,i)=>p.classList.toggle('hidden',i!==n-1));$$('.step').forEach((s,i)=>{s.classList.toggle('active',i===n-1);if(i<n)s.disabled=false});window.scrollTo({top:0,behavior:'smooth'})}
 function selectedTime(){return Number($('#timeChoices .selected')?.dataset.minutes||10)}
-$('#timeChoices button').forEach(b=>b.addEventListener('click',()=>{$('#timeChoices button').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');state.availableTime=Number(b.dataset.minutes)}));
+$$('#timeChoices button').forEach(b=>b.addEventListener('click',()=>{$$('#timeChoices button').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');state.availableTime=Number(b.dataset.minutes)}));
 
 async function extractFile(file){
   if(!file)return '';
@@ -257,7 +257,7 @@ function renderMoments(){
     <div class="card-actions"><button class="primary" data-use>Use this</button><button class="ghost" data-adjust>Adjust</button><button class="secondary-btn" data-skip>Skip</button></div>
     <div class="adjust-panel hidden"><label>What would you change?<textarea data-adjust-text placeholder="e.g., Make it shorter, make it more challenging, better fit my students…"></textarea></label><button class="ghost" data-apply-adjust>Use with adjustment</button></div>
   </article>`).join('');
-  $('.moment-card').forEach(card=>{
+  $$('.moment-card').forEach(card=>{
     card.addEventListener('click',e=>{
       const id=card.dataset.id,m=state.moments.find(x=>String(x.id)===id);if(!m)return;
       if(e.target.dataset.choose){choose(m,Number(e.target.dataset.choose),card,'');return}
@@ -269,7 +269,7 @@ function renderMoments(){
   });
 }
 function choose(moment,minutes,card,adjustment){
-  $('.moment-card').forEach(c=>{c.classList.remove('selected');c.querySelectorAll('.activity-option').forEach(x=>x.classList.remove('selected'))});
+  $$('.moment-card').forEach(c=>{c.classList.remove('selected');c.querySelectorAll('.activity-option').forEach(x=>x.classList.remove('selected'))});
   card.classList.remove('skipped');card.classList.add('selected');card.querySelector(`.activity-option[data-minutes="${minutes}"]`)?.classList.add('selected');
   state.selected={moment,minutes,format:document.querySelector('.format-btn.selected')?.dataset.format||'discussion',adjustment:adjustment||''};updateSelection();log('moment_selected',{momentId:moment.id,minutes,adjustment:!!adjustment});
 }
@@ -279,7 +279,7 @@ function updateSelection(){
   bar.classList.remove('hidden');$('#selectionSummary').textContent='1 opportunity selected';$('#selectionDetail').textContent=state.selected.moment.title+' · about '+state.selected.minutes+' minutes';
 }
 
-$('.format-btn').forEach(b=>b.addEventListener('click',()=>{$('.format-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');if(state.selected)state.selected.format=b.dataset.format;log('format_selected',{format:b.dataset.format});}));
+$$('.format-btn').forEach(b=>b.addEventListener('click',()=>{$$('.format-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');if(state.selected)state.selected.format=b.dataset.format;log('format_selected',{format:b.dataset.format});}));
 
 $('#buildBtn').addEventListener('click',async()=>{
   if(!state.selected)return;
