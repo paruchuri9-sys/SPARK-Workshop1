@@ -241,9 +241,9 @@ function mvpUncover_(q){
         consequential_judgment:{type:'string'},
         why_it_matters:{type:'string'},
         reasoning_focus:{type:'string'},
-        options:{type:'array',minItems:3,maxItems:3,items:{
+        options:{type:'array',minItems:4,maxItems:4,items:{
           type:'object',additionalProperties:false,required:['minutes','label','description'],
-          properties:{minutes:{type:'integer',enum:[5,10,20]},label:{type:'string'},description:{type:'string'}}
+          properties:{minutes:{type:'integer',enum:[5,10,20,30]},label:{type:'string'},description:{type:'string'}}
         }}
       }
     }}}
@@ -254,7 +254,7 @@ function mvpUncover_(q){
     'A consequential reasoning moment is a point where a student judgment could materially change depending on evidence, assumptions, uncertainty, competing explanations, tradeoffs, consequences, or new information.',
     'Do not redesign the lesson. Do not provide generic critical-thinking activities. Do not duplicate reasoning already explicit in substantially the same form.',
     'Ground every moment in a specific place in the supplied activity.',
-    'For each moment, create 5-, 10-, and 20-minute realizations of the SAME underlying reasoning opportunity, not three unrelated activities.',
+    'For each moment, create 5-, 10-, 20-, and 30-minute realizations of the SAME underlying reasoning opportunity, not three unrelated activities.',
     'Preserve the teacher\'s learning objective and constraints when supplied.',
     'Use plain teacher-facing language. Avoid pedagogical jargon unless it clarifies the reasoning focus.',
     'Quality gate: reject candidates that merely add engagement, explanation, recall, or extra work without a meaningful student judgment.',
