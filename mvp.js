@@ -84,13 +84,15 @@ function renderMoments(){
 function choose(moment,minutes,card,adjustment){
   $$('.moment-card').forEach(c=>{c.classList.remove('selected');c.querySelectorAll('.activity-option').forEach(x=>x.classList.remove('selected'))});
   card.classList.remove('skipped');card.classList.add('selected');card.querySelector(`.activity-option[data-minutes="${minutes}"]`)?.classList.add('selected');
-  state.selected={moment,minutes,format:'discussion',adjustment:adjustment||''};updateSelection();log('moment_selected',{momentId:moment.id,minutes,adjustment:!!adjustment});
+  state.selected={moment,minutes,format:document.querySelector('.format-btn.selected')?.dataset.format||'discussion',adjustment:adjustment||''};updateSelection();log('moment_selected',{momentId:moment.id,minutes,adjustment:!!adjustment});
 }
 function updateSelection(){
   const bar=$('#selectionBar');
   if(!state.selected){bar.classList.add('hidden');return}
   bar.classList.remove('hidden');$('#selectionSummary').textContent='1 opportunity selected';$('#selectionDetail').textContent=state.selected.moment.title+' · about '+state.selected.minutes+' minutes';
 }
+
+$('.format-btn').forEach(b=>b.addEventListener('click',()=>{$('.format-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');if(state.selected)state.selected.format=b.dataset.format;log('format_selected',{format:b.dataset.format});}));
 
 $('#buildBtn').addEventListener('click',async()=>{
   if(!state.selected)return;
