@@ -19,14 +19,25 @@ jobs:
     runs-on: ubuntu-latest
     environment: spark-production
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Checkout selected application source
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source }}
+          path: selected-source
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node scripts/check-spark-release.mjs
+      - name: Validate selected release
+        run: |
+          cp apps-script-mvp/appsscript.json selected-source/apps-script-mvp/appsscript.json
+          cd selected-source
+          node ../scripts/check-spark-release.mjs
       - run: npm install --global @google/clasp@3
       - name: Prepare secure clasp mapping
         env:
@@ -39,7 +50,7 @@ jobs:
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
           chmod 600 "$HOME/.clasprc.json"
           mkdir -p .spark-clasp
-          cp apps-script-mvp/Code.gs apps-script-mvp/Index.html apps-script-mvp/appsscript.json .spark-clasp/
+          cp selected-source/apps-script-mvp/Code.gs selected-source/apps-script-mvp/Index.html apps-script-mvp/appsscript.json .spark-clasp/
           node -e "require('fs').writeFileSync('.spark-clasp/.clasp.json',JSON.stringify({scriptId:process.env.SCRIPT_ID,rootDir:'.'}))"
       - name: Deploy to existing URL
         working-directory: .spark-clasp
