@@ -2,30 +2,10 @@
 const GH_ORIGIN='https://paruchuri9-sys.github.io';
 const GH_MVP=GH_ORIGIN+'/SPARK-Workshop1/mvp.html';
 
-function doGet(e){
-  const p=(e&&e.parameter)||{};
-  if(String(p.bridge||'')==='1'){
-    return HtmlService.createHtmlOutput(bridgeHtml_())
-      .setTitle('SPARK MVP Bridge')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  }
-  return HtmlService.createHtmlOutput(shellHtml_())
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('SPARK Reasoning Opportunity Builder')
-    .addMetaTag('viewport','width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-function shellHtml_(){
-  const target=GH_MVP+'?embedded=1';
-  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-    +'<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}iframe{width:100%;height:100%;border:0}</style></head><body>'
-    +'<iframe id="app" src="'+target+'"></iframe>'
-    +'<script>(function(){const ORIGIN='+JSON.stringify(GH_ORIGIN)+';const f=document.getElementById("app");window.addEventListener("message",function(ev){if(ev.origin!==ORIGIN)return;const d=ev.data||{};if(d.type!=="spark-mvp-api"||!d.id)return;google.script.run.withSuccessHandler(function(r){f.contentWindow.postMessage({type:"spark-mvp-api-result",id:d.id,ok:true,result:r},ORIGIN)}).withFailureHandler(function(err){f.contentWindow.postMessage({type:"spark-mvp-api-result",id:d.id,ok:false,error:(err&&err.message)||String(err)},ORIGIN)}).api(d.action,d.payload||{})})})();</script>'
-    +'</body></html>';
-}
-
-function bridgeHtml_(){
-  return '<!doctype html><html><body><script>(function(){parent.postMessage({type:"spark-mvp-relay-ready"},"*");window.addEventListener("message",function(ev){const d=ev.data||{};if(d.type!=="spark-mvp-api"||!d.id)return;google.script.run.withSuccessHandler(function(r){parent.postMessage({type:"spark-mvp-api-result",id:d.id,ok:true,result:r},"*")}).withFailureHandler(function(err){parent.postMessage({type:"spark-mvp-api-result",id:d.id,ok:false,error:(err&&err.message)||String(err)},"*")}).api(d.action,d.payload||{})})})();</script></body></html>';
+    .addMetaTag('viewport','width=device-width, initial-scale=1');
 }
 
 function api(action,payload){
