@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#582C83" />
+  <title>SPARK · Reasoning Opportunity Builder</title>
+  <style>
+:root{
+  --purple:#582C83;--purple-dark:#3b245e;--ink:#28242d;--muted:#6d6873;
+  --bg:#f6f4f8;--paper:#fff;--line:#ddd7e3;--soft:#f1edf5;--green:#e9f6ed;
+  --yellow:#fff8df;--red:#fff0f0;--shadow:0 8px 26px rgba(46,34,61,.07)
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+.topbar{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding:14px clamp(16px,4vw,48px);background:var(--purple);color:white}
+.topbar h1{font-size:1.28rem;margin:0}.brandmark{font-weight:800;letter-spacing:.08em;border:2px solid rgba(255,255,255,.85);padding:8px 10px;border-radius:8px}
+.eyebrow{text-transform:uppercase;letter-spacing:.09em;font-size:.72rem;font-weight:700;opacity:.85}.eyebrow.purple{color:var(--purple);opacity:1}
+.badge{display:inline-flex;border-radius:999px;background:#fff;color:var(--purple);padding:6px 10px;font-size:.78rem;font-weight:700}
+.shell{max-width:980px;margin:24px auto 84px;padding:0 16px}.hidden{display:none!important}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}.step{background:#fff;border:1px solid var(--line);color:var(--muted);padding:10px;border-radius:11px;font-weight:700}.step span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--soft);margin-right:5px}.step.active{border-color:var(--purple);color:var(--purple)}.step.active span{background:var(--purple);color:#fff}.step:disabled{opacity:1}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:var(--shadow);margin-bottom:16px}.card.compact{padding:15px 18px}.hero{padding:26px}.hero h2{font-size:1.8rem;margin:.25rem 0 .4rem}.hero p{max-width:750px;margin:.3rem 0;color:var(--muted)}
+label,legend{display:block;font-weight:700;margin:14px 0 6px}input,textarea,select{font:inherit;width:100%;padding:11px 12px;border:1px solid #bbb3c6;border-radius:9px;background:#fff;color:var(--ink)}textarea{resize:vertical;min-height:120px}
+.grid{display:grid;gap:14px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+fieldset{border:0;padding:0;margin:10px 0}.segmented{display:flex;gap:8px;flex-wrap:wrap}.segmented button,.option-btn,.format-btn{background:#fff;border:1px solid #cfc7d5;color:var(--ink);padding:9px 12px;border-radius:999px}.segmented button.selected,.option-btn.selected,.format-btn.selected{background:var(--soft);border-color:var(--purple);color:var(--purple);box-shadow:0 0 0 2px rgba(88,44,131,.1)}
+button{font:inherit;font-weight:700;border:none;border-radius:9px;padding:10px 14px;cursor:pointer}.primary{background:var(--purple);color:white}.primary:hover{background:var(--purple-dark)}.ghost{background:#fff;color:var(--purple);border:1px solid #baaac8}.secondary-btn{background:var(--soft);color:var(--purple);border:1px solid #cfc4d8}.actions{display:flex;justify-content:flex-end;margin-top:18px}.actions.split{justify-content:space-between}
+details{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-top:18px;background:#fbfafc}summary{cursor:pointer;font-weight:700;color:var(--purple)}
+.page-heading{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;margin:14px 0}.page-heading h2{margin:.25rem 0}.page-heading p{margin:.2rem 0;color:var(--muted)}
+.moment-card{position:relative}.moment-card.selected{border:2px solid var(--purple);background:#fdfbff}.moment-card.skipped{opacity:.58}.moment-title{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.moment-title h3{margin:0;color:var(--purple);font-size:1.25rem}.moment-number{display:inline-grid;place-items:center;min-width:30px;height:30px;border-radius:50%;background:var(--soft);color:var(--purple);font-weight:800}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}.meta-block{border-left:4px solid var(--purple);padding:8px 11px;background:#faf8fc;border-radius:6px}.meta-block strong{display:block;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--purple);margin-bottom:3px}
+.focus{display:inline-flex;border-radius:999px;background:var(--yellow);padding:5px 9px;font-size:.84rem;font-weight:700;margin-bottom:12px}
+.option-list{display:grid;gap:8px}.activity-option{display:grid;grid-template-columns:78px 1fr;gap:10px;align-items:start;border:1px solid var(--line);border-radius:10px;padding:11px;background:#fff}.activity-option.selected{border-color:var(--purple);background:var(--soft)}.activity-option button{padding:7px 9px;background:var(--purple);color:white}.option-copy strong{display:block}.option-copy span{color:var(--muted);font-size:.92rem}
+.card-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.adjust-panel{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}.adjust-panel textarea{min-height:72px}
+.selection-bar{position:sticky;bottom:12px;z-index:12;display:flex;justify-content:space-between;align-items:center;gap:18px;background:#fff;border:2px solid var(--purple);border-radius:14px;padding:14px 16px;box-shadow:0 12px 32px rgba(46,34,61,.18)}
+.provenance{display:flex;gap:18px;flex-wrap:wrap;background:#fbfafc}.prov-item{min-width:160px}.prov-item strong{display:block;font-size:.76rem;color:var(--purple);text-transform:uppercase;letter-spacing:.04em}
+.tabs{display:flex;gap:8px;margin:12px 0}.tab{background:#fff;border:1px solid var(--line);color:var(--muted)}.tab.active{background:var(--purple);color:#fff;border-color:var(--purple)}
+.artifact h3{color:var(--purple);margin-top:1.25rem}.artifact h3:first-child{margin-top:0}.artifact ul,.artifact ol{padding-left:1.4rem}.artifact[contenteditable=true]{outline:3px solid rgba(88,44,131,.12)}
+.muted{color:var(--muted);font-size:.92rem}.error{background:var(--red);border:1px solid #e6bcbc;color:#7a2626;border-radius:9px;padding:10px 12px;margin-top:12px}
+.busy{position:fixed;inset:0;background:rgba(38,32,43,.46);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;padding:30px}.spinner{width:44px;height:44px;border:5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:15px}.busy span{max-width:540px;margin-top:5px}@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:720px){.topbar{grid-template-columns:auto 1fr}.header-right{display:none}.steps{grid-template-columns:1fr}.step{text-align:left}.grid.two,.meta-grid{grid-template-columns:1fr}.page-heading{flex-direction:column}.selection-bar{bottom:6px}.activity-option{grid-template-columns:70px 1fr}}
+
+</style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
+  <script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brandmark">SPARK</div>
+  <div>
+    <div class="eyebrow">Reasoning-Integrated Education</div>
+    <h1>Reasoning Opportunity Builder</h1>
+  </div>
+  <div class="header-right"><span class="badge">MVP v0.2</span></div>
+</header>
+
+<main class="shell">
+  <nav class="steps" aria-label="Progress">
+    <button class="step active" data-step="1"><span>1</span> Bring activity</button>
+    <button class="step" data-step="2" disabled><span>2</span> Choose moment</button>
+    <button class="step" data-step="3" disabled><span>3</span> Build</button>
+  </nav>
+
+  <section id="page1" class="page">
+    <div class="card hero">
+      <div class="eyebrow purple">Start with what you already teach</div>
+      <h2>Find reasoning opportunities in an existing activity</h2>
+      <p>Upload a file, paste a public lesson URL, or paste the activity itself. SPARK will look for places where students could make, test, or revise an important judgment.</p>
+    </div>
+
+    <div class="card">
+      <label for="activityUrl">Paste a public lesson URL</label>
+      <input id="activityUrl" type="url" placeholder="https://example.org/lesson-plan" />
+      <p class="muted">Public web pages only for now. Login-protected pages are not accessible.</p>
+
+      <label for="activityFile">Or upload activity</label>
+      <input id="activityFile" type="file" accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+      <p id="fileStatus" class="muted">TXT, MD, PDF, or DOCX.</p>
+
+      <label for="activityText">Or paste the activity</label>
+      <textarea id="activityText" rows="12" placeholder="Paste the assignment, lesson, worksheet, scenario, discussion prompt, or activity here..."></textarea>
+
+      <div class="grid two">
+        <label>Grade level or course
+          <input id="gradeCourse" placeholder="e.g., Grade 8 U.S. History" />
+        </label>
+        <label>Subject
+          <input id="subject" placeholder="e.g., Social Studies" />
+        </label>
+      </div>
+
+      <fieldset>
+        <legend>Additional class time available</legend>
+        <div class="segmented" id="timeChoices">
+          <button type="button" data-minutes="5">5 min</button>
+          <button type="button" data-minutes="10" class="selected">10 min</button>
+          <button type="button" data-minutes="20">20 min</button>
+          <button type="button" data-minutes="30">30+ min</button>
+        </div>
+      </fieldset>
+
+      <details>
+        <summary>Add context <span class="muted">(optional)</span></summary>
+        <label>Learning objective
+          <input id="objective" placeholder="What should students learn or accomplish?" />
+        </label>
+        <div class="grid two">
+          <label>Preserve
+            <input id="preserve" placeholder="What should SPARK not disrupt?" />
+          </label>
+          <label>Avoid
+            <input id="avoid" placeholder="Anything SPARK should avoid?" />
+          </label>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button id="findBtn" class="primary">Find opportunities</button>
+      </div>
+      <div id="page1Error" class="error hidden"></div>
+    </div>
+  </section>
+
+  <section id="page2" class="page hidden">
+    <div class="page-heading">
+      <div>
+        <div class="eyebrow purple">SPARK uncovered</div>
+        <h2 id="momentsHeading">Consequential moments worth considering</h2>
+        <p>Choose a moment that is worth the class time for your students. These are suggestions, not required changes.</p>
+      </div>
+      <button class="ghost" data-back="1">← Change activity</button>
+    </div>
+
+    <div id="momentsList"></div>
+
+    <div id="selectionBar" class="selection-bar hidden">
+      <div>
+        <strong id="selectionSummary">1 opportunity selected</strong>
+        <div id="selectionDetail" class="muted"></div>
+        <div class="format-row" aria-label="Activity format">
+          <span class="muted">Format:</span>
+          <button type="button" class="format-btn selected" data-format="discussion">Discussion</button>
+          <button type="button" class="format-btn" data-format="written">Written</button>
+          <button type="button" class="format-btn" data-format="pairs_groups">Pairs / groups</button>
+          <button type="button" class="format-btn" data-format="whole_class">Whole class</button>
+        </div>
+      </div>
+      <button id="buildBtn" class="primary">Create activity</button>
+    </div>
+    <div id="page2Error" class="error hidden"></div>
+  </section>
+
+  <section id="page3" class="page hidden">
+    <div class="page-heading">
+      <div>
+        <div class="eyebrow purple">Classroom-ready intervention</div>
+        <h2>Your SPARK activity</h2>
+      </div>
+      <button class="ghost" data-back="2">← Choose another moment</button>
+    </div>
+
+    <div id="provenance" class="card compact provenance"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="teacher">Teacher View</button>
+      <button class="tab" data-tab="student">Student View</button>
+    </div>
+
+    <article id="teacherView" class="card artifact"></article>
+    <article id="studentView" class="card artifact hidden"></article>
+
+    <div class="actions split">
+      <button id="editBtn" class="ghost">Edit activity</button>
+      <button id="restartBtn" class="secondary-btn">Try another activity</button>
+    </div>
+    <div id="page3Error" class="error hidden"></div>
+  </section>
+
+  <div id="busy" class="busy hidden" aria-live="polite">
+    <div class="spinner"></div>
+    <strong id="busyTitle">SPARK is analyzing the activity…</strong>
+    <span id="busyText">Looking for moments where student judgment could meaningfully change.</span>
+  </div>
+</main>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const state={sourceText:'',sourceUrl:'',fileName:'',gradeCourse:'',subject:'',availableTime:10,objective:'',preserve:'',avoid:'',moments:[],selected:null,artifact:null,sessionId:'mvp_'+Date.now()+'_'+Math.random().toString(36).slice(2,8)};
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function nl(s){return esc(s).replace(/\n/g,'<br>')}
+function busy(title,text){$('#busyTitle').textContent=title;$('#busyText').textContent=text||'';$('#busy').classList.remove('hidden')}
+function unbusy(){$('#busy').classList.add('hidden')}
+function err(id,msg){const el=$(id);el.textContent=msg||'';el.classList.toggle('hidden',!msg)}
+function call(action,payload){return new Promise((resolve,reject)=>{try{google.script.run.withSuccessHandler(r=>r&&r.ok===false?reject(new Error(r.error||'Request failed')):resolve(r)).withFailureHandler(e=>reject(new Error(e?.message||String(e)))).api(action,payload||{})}catch(e){reject(e)}})}
+function log(event,detail){call('mvpEvent',{sessionId:state.sessionId,event,detail:detail||{}}).catch(()=>{})}
+function showPage(n){$$('.page').forEach((p,i)=>p.classList.toggle('hidden',i!==n-1));$$('.step').forEach((s,i)=>{s.classList.toggle('active',i===n-1);if(i<n)s.disabled=false});window.scrollTo({top:0,behavior:'smooth'})}
+function selectedTime(){return Number($('#timeChoices .selected')?.dataset.minutes||10)}
+$$('#timeChoices button').forEach(b=>b.addEventListener('click',()=>{$$('#timeChoices button').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');state.availableTime=Number(b.dataset.minutes)}));
+
+async function extractFile(file){
+  if(!file)return '';
+  const name=file.name.toLowerCase();
+  $('#fileStatus').textContent='Reading '+file.name+'…';
+  if(name.endsWith('.txt')||name.endsWith('.md')) return await file.text();
+  if(name.endsWith('.docx')){
+    if(!window.mammoth)throw new Error('DOCX reader did not load. Paste the text instead.');
+    const result=await window.mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()});
+    return result.value||'';
+  }
+  if(name.endsWith('.pdf')){
+    const pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+    const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+    let out='';
+    for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i);const content=await page.getTextContent();out+=content.items.map(x=>x.str).join(' ')+'\n';}
+    return out;
+  }
+  throw new Error('Unsupported file type. Use TXT, MD, PDF, DOCX, or paste the activity.');
+}
+$('#activityFile').addEventListener('change',async e=>{try{const f=e.target.files?.[0];if(!f)return;const text=await extractFile(f);state.fileName=f.name;$('#activityText').value=text;$('#fileStatus').textContent=f.name+' · '+text.length.toLocaleString()+' characters extracted';}catch(ex){err('#page1Error',ex.message);$('#fileStatus').textContent='Could not read file.'}});
+
+$('#findBtn').addEventListener('click',async()=>{
+  err('#page1Error','');
+  state.sourceText=$('#activityText').value.trim();
+  state.sourceUrl=$('#activityUrl').value.trim();
+  state.gradeCourse=$('#gradeCourse').value.trim();
+  state.subject=$('#subject').value.trim();
+  state.availableTime=selectedTime();
+  state.objective=$('#objective').value.trim();
+  state.preserve=$('#preserve').value.trim();
+  state.avoid=$('#avoid').value.trim();
+  if(state.sourceText.length<80&&!state.sourceUrl)return err('#page1Error','Upload or paste the activity, or provide a public lesson URL.');
+  if(state.sourceUrl&&!/^https?:\/\//i.test(state.sourceUrl))return err('#page1Error','Enter a full public URL beginning with http:// or https://.');
+  if(!state.gradeCourse)return err('#page1Error','Add the grade level or course.');
+  busy('SPARK is finding consequential moments…','Looking for places where student judgment could meaningfully change.');
+  try{
+    const r=await call('mvpUncover',{sessionId:state.sessionId,sourceText:state.sourceText,sourceUrl:state.sourceUrl,fileName:state.fileName,gradeCourse:state.gradeCourse,subject:state.subject,availableTime:state.availableTime,objective:state.objective,preserve:state.preserve,avoid:state.avoid});
+    state.moments=r.moments||[];
+    if(!state.moments.length)throw new Error('SPARK did not find a strong enough opportunity in this activity.');
+    state.selected=null;renderMoments();showPage(2);log('moments_shown',{count:state.moments.length});
+  }catch(ex){err('#page1Error',ex.message||String(ex))}finally{unbusy()}
+});
+
+function renderMoments(){
+  $('#momentsHeading').textContent='SPARK found '+state.moments.length+' places worth considering';
+  $('#momentsList').innerHTML=state.moments.map((m,i)=>`<article class="card moment-card" data-id="${esc(m.id)}">
+    <div class="moment-title"><div style="display:flex;gap:10px"><span class="moment-number">${i+1}</span><div><h3>${esc(m.title)}</h3></div></div></div>
+    <div class="meta-grid">
+      <div class="meta-block"><strong>Where</strong>${nl(m.source_location)}</div>
+      <div class="meta-block"><strong>Students currently</strong>${nl(m.current_task)}</div>
+    </div>
+    <div class="meta-block"><strong>Opportunity</strong>${nl(m.consequential_judgment)}</div>
+    <p><strong>Why it matters:</strong> ${nl(m.why_it_matters)}</p>
+    <div class="focus">${esc(m.reasoning_focus)}</div>
+    <div class="option-list">${(m.options||[]).filter(o=>Number(o.minutes)<=state.availableTime||state.availableTime>=30).map(o=>`<div class="activity-option" data-minutes="${o.minutes}"><button type="button" data-choose="${o.minutes}">${o.minutes} min</button><div class="option-copy"><strong>${esc(o.label)}</strong><span>${nl(o.description)}</span></div></div>`).join('')}</div>
+    <div class="card-actions"><button class="primary" data-use>Use this</button><button class="ghost" data-adjust>Adjust</button><button class="secondary-btn" data-skip>Skip</button></div>
+    <div class="adjust-panel hidden"><label>What would you change?<textarea data-adjust-text placeholder="e.g., Make it shorter, make it more challenging, better fit my students…"></textarea></label><button class="ghost" data-apply-adjust>Use with adjustment</button></div>
+  </article>`).join('');
+  $$('.moment-card').forEach(card=>{
+    card.addEventListener('click',e=>{
+      const id=card.dataset.id,m=state.moments.find(x=>String(x.id)===id);if(!m)return;
+      if(e.target.dataset.choose){choose(m,Number(e.target.dataset.choose),card,'');return}
+      if(e.target.hasAttribute('data-use')){const first=(m.options||[]).filter(o=>Number(o.minutes)<=state.availableTime||state.availableTime>=30)[0];choose(m,Number(first?.minutes||Math.min(10,state.availableTime)),card,'');return}
+      if(e.target.hasAttribute('data-adjust')){card.querySelector('.adjust-panel').classList.toggle('hidden');return}
+      if(e.target.hasAttribute('data-apply-adjust')){const note=card.querySelector('[data-adjust-text]').value.trim();const first=(m.options||[]).filter(o=>Number(o.minutes)<=state.availableTime||state.availableTime>=30)[0];choose(m,Number(first?.minutes||Math.min(10,state.availableTime)),card,note);return}
+      if(e.target.hasAttribute('data-skip')){card.classList.add('skipped');if(state.selected?.moment.id===m.id){state.selected=null;updateSelection()}log('moment_skipped',{momentId:m.id});}
+    })
+  });
+}
+function choose(moment,minutes,card,adjustment){
+  $$('.moment-card').forEach(c=>{c.classList.remove('selected');c.querySelectorAll('.activity-option').forEach(x=>x.classList.remove('selected'))});
+  card.classList.remove('skipped');card.classList.add('selected');card.querySelector(`.activity-option[data-minutes="${minutes}"]`)?.classList.add('selected');
+  state.selected={moment,minutes,format:document.querySelector('.format-btn.selected')?.dataset.format||'discussion',adjustment:adjustment||''};updateSelection();log('moment_selected',{momentId:moment.id,minutes,adjustment:!!adjustment});
+}
+function updateSelection(){
+  const bar=$('#selectionBar');
+  if(!state.selected){bar.classList.add('hidden');return}
+  bar.classList.remove('hidden');$('#selectionSummary').textContent='1 opportunity selected';$('#selectionDetail').textContent=state.selected.moment.title+' · about '+state.selected.minutes+' minutes';
+}
+
+$$('.format-btn').forEach(b=>b.addEventListener('click',()=>{$$('.format-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');if(state.selected)state.selected.format=b.dataset.format;log('format_selected',{format:b.dataset.format});}));
+
+$('#buildBtn').addEventListener('click',async()=>{
+  if(!state.selected)return;
+  err('#page2Error','');
+  busy('SPARK is building the activity…','Keeping the selected consequential judgment and fitting it to the time you chose.');
+  try{
+    const r=await call('mvpBuild',{sessionId:state.sessionId,sourceText:state.sourceText,sourceUrl:state.sourceUrl,fileName:state.fileName,gradeCourse:state.gradeCourse,subject:state.subject,objective:state.objective,preserve:state.preserve,avoid:state.avoid,selectedMoment:state.selected.moment,minutes:state.selected.minutes,format:state.selected.format,adjustment:state.selected.adjustment});
+    state.artifact=r.artifact;renderArtifact();showPage(3);log('artifact_generated',{momentId:state.selected.moment.id,minutes:state.selected.minutes});
+  }catch(ex){err('#page2Error',ex.message||String(ex))}finally{unbusy()}
+});
+
+function section(title,value){if(!value)return'';if(Array.isArray(value))return `<h3>${esc(title)}</h3><ul>${value.map(x=>`<li>${nl(x)}</li>`).join('')}</ul>`;return `<h3>${esc(title)}</h3><div>${nl(value)}</div>`}
+function renderArtifact(){
+  const a=state.artifact||{},s=state.selected;
+  $('#provenance').innerHTML=`<div class="prov-item"><strong>Added to</strong>${esc(s.moment.source_location)}</div><div class="prov-item"><strong>Reasoning goal</strong>${esc(s.moment.reasoning_focus)}</div><div class="prov-item"><strong>Time</strong>About ${esc(s.minutes)} minutes</div>`;
+  $('#teacherView').innerHTML=section('Purpose',a.teacher?.purpose)+section('Where to insert it',a.teacher?.where_to_insert)+section('Preparation / materials',a.teacher?.preparation)+section('Facilitation',a.teacher?.facilitation)+section('Exact prompts',a.teacher?.prompts)+section('What to look for',a.teacher?.look_for);
+  $('#studentView').innerHTML=section('Student activity',a.student?.instructions)+section('Evidence / information',a.student?.evidence)+section('Questions',a.student?.questions);
+}
+$$('.tab').forEach(t=>t.addEventListener('click',()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');$('#teacherView').classList.toggle('hidden',t.dataset.tab!=='teacher');$('#studentView').classList.toggle('hidden',t.dataset.tab!=='student')}));
+$('#editBtn').addEventListener('click',()=>{const v=$('.tab.active')?.dataset.tab==='student'?$('#studentView'):$('#teacherView');const editing=v.getAttribute('contenteditable')==='true';v.setAttribute('contenteditable',editing?'false':'true');$('#editBtn').textContent=editing?'Edit activity':'Finish editing';if(editing)log('artifact_edited',{view:v.id})});
+$('#restartBtn').addEventListener('click',()=>{location.reload()});
+$$('[data-back]').forEach(b=>b.addEventListener('click',()=>showPage(Number(b.dataset.back))));
+})();
+</script>
+</body>
+</html>
