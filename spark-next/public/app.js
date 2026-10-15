@@ -39,7 +39,7 @@ $('analyze').onclick=async()=>{
    for(const [key,val] of [['Where',m.where],['Evidence',m.evidence],['Current coverage',labels[m.coverage]||m.coverage],['Why this helps',m.added_value]]){const p=document.createElement('p');const b=document.createElement('b');b.textContent=key+': ';p.append(b,document.createTextNode(String(val||'')));evidenceBody.append(p);}
    evidence.append(evidenceBody);body.append(evidence);
    if(m.quick_check&&m.quick_check_purpose!=='none'){
-    const check=document.createElement('details'),cs=document.createElement('summary');cs.textContent='Optional quick check (no responses collected)';check.append(cs);
+    const check=document.createElement('details'),cs=document.createElement('summary');cs.textContent='Optional '+({'multiple_choice':'multiple-choice','show_of_hands':'show-of-hands','short_response':'short-response'}[m.quick_check_format]||'quick')+' check (no responses collected)';check.append(cs);
     const q=document.createElement('p');q.textContent=m.quick_check;const aim=document.createElement('p');aim.className='status';aim.textContent='Probe purpose: '+m.quick_check_purpose.replaceAll('_',' ')+'. This is a suggested classroom question, not proof of learning or transfer.';check.append(q,aim);body.append(check);
    }
    details.append(summary,body);line.append(choose,details);card.append(line);$('moments').append(card);
