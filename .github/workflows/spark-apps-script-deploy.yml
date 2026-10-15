@@ -115,9 +115,8 @@ jobs:
           URL="https://script.google.com/macros/s/$DEPLOYMENT_ID/exec"
           mkdir -p release-probe
           curl --location --silent --show-error --max-time 60 \
-            --dump-header release-probe/headers.txt \
             --output release-probe/body.html \
-            --write-out 'status=%{http_code} final_url=%{url_effective} redirects=%{num_redirects}\\n' \
+            --write-out 'status=%{http_code} redirects=%{num_redirects}\\n' \
             "$URL" > release-probe/transport.txt
           node scripts/verify-spark-response.mjs release-probe/body.html release-probe/transport.txt
           echo "### HTTP probe" >> "$GITHUB_STEP_SUMMARY"
@@ -130,6 +129,5 @@ jobs:
           name: spark-release-probe-${{ github.run_id }}
           path: |
             release-probe/transport.txt
-            release-probe/headers.txt
           if-no-files-found: ignore
           retention-days: 14
