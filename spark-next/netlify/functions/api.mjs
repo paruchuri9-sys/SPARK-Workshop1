@@ -1,6 +1,6 @@
 import {getDatabase} from '@netlify/database';
 import crypto from 'node:crypto';
-const DESIGN='0.8.0-demo', REASONER='0.7.0-focused', BUILD=process.env.COMMIT_REF||'local';
+const DESIGN='0.8.1-demo', REASONER='0.7.0-focused', BUILD=process.env.COMMIT_REF||'local';
 const allowed=new Set(['session_started','opportunities_generated','moments_selected','activity_generated','teacher_feedback','api_error']);
 const cors={'content-type':'application/json','cache-control':'no-store'};
 function respond(body,status=200){return new Response(JSON.stringify(body),{status,headers:cors});}
@@ -24,6 +24,7 @@ async function model(messages,schema){
 
 // Conservative v0 URL import: educational source allowlist, HTTPS only, no redirects.
 // Prevent arbitrary server-side URL fetching and inadvertent access to private services.
+const pdfSourceHosts=new Set(['static.pbslearningmedia.org','scsp.chem.ucsb.edu']);
 const sourceHosts=new Set(['readwritethink.org','www.readwritethink.org','loc.gov','www.loc.gov','pbslearningmedia.org','www.pbslearningmedia.org','education.nationalgeographic.org']);
 function decodeEntities(s){return s.replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&#(\d+);/g,(_,n)=>String.fromCharCode(Number(n)));}
 async function extractPdfLesson(pdfBase64){
@@ -31,7 +32,7 @@ async function extractPdfLesson(pdfBase64){
  const buffer=Buffer.from(pdfBase64,'base64');
  if(buffer.length>4*1024*1024||buffer.subarray(0,5).toString()!=='%PDF-')throw Error('The uploaded file is not a supported PDF.');
  let parsed;
- try{const pdfParse=(await import('pdf-parse')).default;parsed=await pdfParse(buffer,{max:80});}
+ try{const pdfModule=await import('pdf-parse/lib/pdf-parse.js');const pdfParse=pdfModule.default||pdfModule;parsed=await pdfParse(buffer,{max:80});}
  catch{throw Error('PDF text could not be extracted. Please paste the lesson content.');}
  const extracted=String(parsed.text||'').replace(/\s+/g,' ').trim().slice(0,30000);
  if(!safeLesson(extracted))throw Error('This PDF has too little selectable text. Please paste the lesson content.');
@@ -39,11 +40,20 @@ async function extractPdfLesson(pdfBase64){
 }
 async function extractPublicLesson(url){
  let u;try{u=new URL(url);}catch{throw Error('Invalid lesson URL');}
- if(u.protocol!=='https:'||u.username||u.password||u.port||!sourceHosts.has(u.hostname.toLowerCase()))throw Error('URL import currently supports selected public educational sites only. Paste lesson text for other sources.');
+ const isPdf=/\.pdf$/i.test(u.pathname);const host=u.hostname.toLowerCase();
+ if(u.protocol!=='https:'||u.username||u.password||u.port||(!sourceHosts.has(host)&&!(isPdf&&pdfSourceHosts.has(host))))throw Error('This lesson URL is not supported for direct import.');
+
  let response;
- try{response=await fetch(u.toString(),{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'text/html'}});}
+ try{response=await fetch(u.toString(),{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:isPdf?'application/pdf':'text/html'}});}
  catch{throw Error('This website could not be retrieved directly (it may redirect or block automated access).');}
  if(!response.ok)throw Error('Lesson website returned HTTP '+response.status);
+ if(isPdf){
+   if(!(response.headers.get('content-type')||'').toLowerCase().includes('pdf'))throw Error('The URL did not return a PDF.');
+   if(Number(response.headers.get('content-length')||0)>4*1024*1024)throw Error('PDF exceeds the 4 MB import limit.');
+   const bytes=Buffer.from(await response.arrayBuffer());
+   if(bytes.length>4*1024*1024)throw Error('PDF exceeds the 4 MB import limit.');
+   return extractPdfLesson(bytes.toString('base64'));
+ }
  if(!(response.headers.get('content-type')||'').includes('text/html'))throw Error('Lesson URL did not return HTML');
  const length=Number(response.headers.get('content-length')||0);
  if(length>1500000)throw Error('Lesson page is too large');
@@ -92,8 +102,8 @@ export default async function(req){
  }catch(e){
   console.error('SPARK function failure',String(e?.message||e));
   const message=String(e?.message||'');
-  if(/^(URL import currently supports|Invalid lesson URL|Lesson website returned HTTP|Lesson URL did not return HTML|Lesson page is too large|Could not extract enough lesson text|This website could not be retrieved directly|PDF is invalid|The uploaded file|PDF text could not|This PDF has too little)/.test(message)){
-   return respond({error:message+' You can paste the relevant lesson text instead.',code:'SOURCE_IMPORT_FAILED'},422);
+  if(/^(URL import currently supports|Invalid lesson URL|Lesson website returned HTTP|Lesson URL did not return HTML|Lesson page is too large|Could not extract enough lesson text|This website could not be retrieved directly|PDF is invalid|The uploaded file|PDF text could not|The URL did not return a PDF|PDF exceeds|This lesson URL is not supported|This PDF has too little)/.test(message)){
+   return respond({error:message+' Please upload a PDF or paste the lesson content.',code:'SOURCE_IMPORT_FAILED'},422);
   }
   return respond({error:'The request could not be completed. Any generated result has not been confirmed as saved. Check the function logs.',code:'SERVICE_ERROR'},503);
  }
