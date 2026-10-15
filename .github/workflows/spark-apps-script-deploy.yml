@@ -106,16 +106,30 @@ jobs:
             echo "Inspect the published version above; validate the live UI manually before declaring success."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Accessibility smoke test
+      - name: Strict release response verification
+        id: verify
         env:
           DEPLOYMENT_ID: ${{ secrets.SPARK_DEPLOYMENT_ID }}
         run: |
           set -euo pipefail
           URL="https://script.google.com/macros/s/$DEPLOYMENT_ID/exec"
-          code=$(curl --location --silent --show-error --max-time 45 --output response.html --write-out '%{http_code}' "$URL")
-          echo "Anonymous GET HTTP status: $code" >> "$GITHUB_STEP_SUMMARY"
-          if [[ "$code" != "200" ]] || grep -Eiq 'Sorry, unable to open the file at this time|You need access|Sign in to continue' response.html; then
-            echo "::error::Published web app did not pass anonymous HTTP/accessibility check"
-            exit 1
-          fi
-          echo "HTTP/accessibility probe passed. Manual browser and Uncover → Select → Build tests still required." >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p release-probe
+          curl --location --silent --show-error --max-time 60 \
+            --dump-header release-probe/headers.txt \
+            --output release-probe/body.html \
+            --write-out 'status=%{http_code} final_url=%{url_effective} redirects=%{num_redirects}\\n' \
+            "$URL" > release-probe/transport.txt
+          node scripts/verify-spark-response.mjs release-probe/body.html release-probe/transport.txt
+          echo "### HTTP probe" >> "$GITHUB_STEP_SUMMARY"
+          cat release-probe/transport.txt >> "$GITHUB_STEP_SUMMARY"
+          echo "SPARK identity verified in returned HTML (not merely HTTP 200)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Save probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spark-release-probe-${{ github.run_id }}
+          path: |
+            release-probe/transport.txt
+            release-probe/headers.txt
+          if-no-files-found: ignore
+          retention-days: 14
