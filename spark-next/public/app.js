@@ -59,13 +59,21 @@ function renderPlan(plan,selected){
 }
 
 
-async function call(data){const r=await fetch('/.netlify/functions/api',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,lessonId,...data})});const type=r.headers.get('content-type')||'';if(!type.includes('application/json'))throw Error('SPARK API unavailable: server returned a webpage (HTTP '+r.status+'). Verify function routing and access permissions.');const result=await r.json();if(!r.ok||!result.ok)throw Error(result.error||'Request failed');return result;}
+async function call(data){const r=await fetch('/.netlify/functions/api',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,lessonId,...data})});const type=r.headers.get('content-type')||'';if(!type.includes('application/json'))throw Error(data.lessonUrl?'This webpage could not be accessed. Please upload a PDF or paste the lesson content.':'The lesson could not be processed right now. Please retry, or paste the lesson content.');const result=await r.json();if(!r.ok||!result.ok)throw Error(result.error||'Request failed');return result;}
 function status(text){$('state').textContent=text;}
 $('analyze').onclick=async()=>{
  const button=$('analyze');button.disabled=true;status('Analyzing lesson and saving research events…');$('result').hidden=true;
  try{
   lessonId=crypto.randomUUID();currentPlan=null;moments=[];$('moments').replaceChildren();$('opportunities').hidden=true;
-  const r=await call({action:'analyze',lesson:$('lesson').value,lessonUrl:$('lessonUrl').value.trim(),grade:$('grade').value});
+  const file=$('lessonPdf').files[0];
+  let pdfBase64=null;
+  if(file){
+   if(file.size>4*1024*1024)throw Error('PDF is too large. Please choose a PDF under 4 MB or paste the lesson content.');
+   if(!(/\.pdf$/i.test(file.name)||file.type==='application/pdf'))throw Error('Please select a PDF file.');
+   const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Unable to read the PDF'));reader.readAsDataURL(file);});
+   pdfBase64=String(data).split(',')[1];
+  }
+  const r=await call({action:'analyze',lesson:$('lesson').value,lessonUrl:file?'':$('lessonUrl').value.trim(),pdfBase64,grade:$('grade').value});
   moments=r.moments;$('moments').replaceChildren();
   for(const m of moments){
    const card=document.createElement('article');
@@ -86,8 +94,8 @@ $('analyze').onclick=async()=>{
    for(const [key,val] of [['Where',m.where],['Evidence',m.evidence],['Current coverage',labels[m.coverage]||m.coverage]]){const p=document.createElement('p');const b=document.createElement('b');b.textContent=key+': ';p.append(b,document.createTextNode(String(val||'')));evidenceBody.append(p);}
    evidence.append(evidenceBody);body.append(evidence);
    if(m.quick_check&&m.quick_check_purpose!=='none'){
-    const check=document.createElement('details'),cs=document.createElement('summary');cs.textContent='Optional '+({'multiple_choice':'multiple-choice','show_of_hands':'show-of-hands','short_response':'short-response'}[m.quick_check_format]||'quick')+' check (no responses collected)';check.append(cs);
-    const q=document.createElement('p');q.textContent=m.quick_check.replace(/^(multiple_choice|show_of_hands|short_response):\s*/i,'');const aim=document.createElement('p');aim.className='status';aim.textContent='Checks '+m.quick_check_purpose.replaceAll('_',' ')+'. Responses are not collected.';check.append(q,aim);body.append(check);
+    const check=document.createElement('details'),cs=document.createElement('summary');cs.textContent='Optional '+({'multiple_choice':'multiple-choice','show_of_hands':'show-of-hands','short_response':'short-response'}[m.quick_check_format]||'quick')+' check';check.append(cs);
+    const q=document.createElement('p');q.textContent=m.quick_check.replace(/^(multiple_choice|show_of_hands|short_response):\s*/i,'');const aim=document.createElement('p');aim.className='status';aim.textContent='Checks '+m.quick_check_purpose.replaceAll('_',' ')+'.';check.append(q,aim);body.append(check);
    }
    details.append(summary,body);line.append(choose,details);card.append(line);$('moments').append(card);
   }
