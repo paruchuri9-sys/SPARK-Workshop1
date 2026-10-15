@@ -7,9 +7,9 @@
     "check": "node --check public/app.js && node --check netlify/functions/api.mjs"
   },
   "dependencies": {
-    "@netlify/database": "^1.0.0"
+    "@netlify/database": "^2.0.1"
   },
   "devDependencies": {
-    "netlify-cli": "^23.0.0"
+    "netlify-cli": "^26.0.0"
   }
 }
