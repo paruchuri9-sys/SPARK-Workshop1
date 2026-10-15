@@ -5,7 +5,9 @@ on:
       source:
         type: choice
         required: true
-        options: [main, spark-mvp-design-0.3-reasoner-0.3]
+        options:
+          - main
+          - spark-mvp-design-0.3-reasoner-0.3
       release_note:
         type: string
         required: true
