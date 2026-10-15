@@ -32,7 +32,7 @@ $('editSelections').onclick=()=>showPage('opportunities');
 $('printPlan').onclick=()=>window.print();
 $('copyPlan').onclick=()=>{
  if(!currentPlan)return;
- const text=[currentPlan.lesson_title,currentPlan.plan_summary,...currentPlan.steps.map((x,i)=>[String(i+1)+'. '+x.placement,x.reasoning_type,'Ask: '+x.teacher_question,'Students: '+x.student_action,'Look for: '+x.look_for,x.connection?'Connection: '+x.connection:'',x.optional_check?'Optional check: '+x.optional_check:''].filter(Boolean).join('\n')),currentPlan.integration_notes].join('\n\n');
+ const text=[currentPlan.lesson_title,currentPlan.plan_summary,...currentPlan.steps.map((x,i)=>[String(i+1)+'. '+x.placement,x.reasoning_type,'Ask: '+x.teacher_question,'Students: '+x.student_action,'Look for: '+x.look_for,x.optional_check?'Optional check: '+x.optional_check:''].filter(Boolean).join('\n')),currentPlan.integration_notes].join('\n\n');
  navigator.clipboard.writeText(text).catch(()=>{$('buildStatus').textContent='Copy unavailable; select and copy the text manually.';});
 };
 function renderPlan(plan,selected){
@@ -50,7 +50,7 @@ function renderPlan(plan,selected){
   const timing=document.createElement('span');timing.textContent='~'+Math.max(0,step.estimated_minutes)+' min';
   top.append(heading,timing);article.append(top);
   const type=document.createElement('p');type.className='plan-reasoning-type';type.textContent=step.reasoning_type;article.append(type);
-  for(const [label,value] of [['Ask students',step.teacher_question],['Students do',step.student_action],['Look for',step.look_for],['Connection',step.connection],['Optional quick check',step.optional_check]]){
+  for(const [label,value] of [['Ask students',step.teacher_question],['Students do',step.student_action],['Look for',step.look_for],['Optional quick check',step.optional_check]]){
    if(!value)continue;const row=document.createElement('p');const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(value));article.append(row);
   }
   $('planSteps').append(article);
@@ -77,18 +77,17 @@ $('analyze').onclick=async()=>{
    summary.append(title,sub);choose.addEventListener('change',()=>{selection();builtIds='';});
    const body=document.createElement('div');body.className='moment-body';
    const add=(name,value)=>{if(!value)return;const p=document.createElement('p'),b=document.createElement('b');b.textContent=name+': ';p.append(b,document.createTextNode(String(value)));body.append(p);};
-   add('Suggested question or adjustment',m.reasoning_move||m.teacher_prompt);
-   add('Time estimate (~'+m.minutes+' min)',m.time_rationale);
-   add('Connect to another step',m.connection_cue);
-   add('Possible transfer cue',m.transfer_cue);
-   const info=document.createElement('details'),is=document.createElement('summary');is.textContent='Learn more: '+m.construct;info.append(is);const explanation=document.createElement('p');explanation.textContent=(reasoningExplainers[m.construct]||'Describe the reasoning operation and what students should do.')+' In this lesson: '+m.explanation;info.append(explanation);body.append(info);
+   add('Suggested question',m.teacher_prompt||m.reasoning_move);
+   add('Why this helps',m.added_value);
+   add('Estimated extra time (~'+m.minutes+' min)',m.time_rationale);
+      const info=document.createElement('details'),is=document.createElement('summary');is.textContent='Learn more: '+m.construct;info.append(is);const explanation=document.createElement('p');explanation.textContent=(reasoningExplainers[m.construct]||'Describe the reasoning operation and what students should do.')+' In this lesson: '+m.explanation;info.append(explanation);body.append(info);
    const evidence=document.createElement('details'),es=document.createElement('summary');es.textContent='Existing lesson evidence and rationale';evidence.append(es);
    const evidenceBody=document.createElement('div');const labels={already_present:'Already present',strengthened:'Can be strengthened',uncovered:'Not explicitly present'};
-   for(const [key,val] of [['Where',m.where],['Evidence',m.evidence],['Current coverage',labels[m.coverage]||m.coverage],['Why this helps',m.added_value]]){const p=document.createElement('p');const b=document.createElement('b');b.textContent=key+': ';p.append(b,document.createTextNode(String(val||'')));evidenceBody.append(p);}
+   for(const [key,val] of [['Where',m.where],['Evidence',m.evidence],['Current coverage',labels[m.coverage]||m.coverage]]){const p=document.createElement('p');const b=document.createElement('b');b.textContent=key+': ';p.append(b,document.createTextNode(String(val||'')));evidenceBody.append(p);}
    evidence.append(evidenceBody);body.append(evidence);
    if(m.quick_check&&m.quick_check_purpose!=='none'){
     const check=document.createElement('details'),cs=document.createElement('summary');cs.textContent='Optional '+({'multiple_choice':'multiple-choice','show_of_hands':'show-of-hands','short_response':'short-response'}[m.quick_check_format]||'quick')+' check (no responses collected)';check.append(cs);
-    const q=document.createElement('p');q.textContent=m.quick_check;const aim=document.createElement('p');aim.className='status';aim.textContent='Probe purpose: '+m.quick_check_purpose.replaceAll('_',' ')+'. This is a suggested classroom question, not proof of learning or transfer.';check.append(q,aim);body.append(check);
+    const q=document.createElement('p');q.textContent=m.quick_check.replace(/^(multiple_choice|show_of_hands|short_response):\s*/i,'');const aim=document.createElement('p');aim.className='status';aim.textContent='Checks '+m.quick_check_purpose.replaceAll('_',' ')+'. Responses are not collected.';check.append(q,aim);body.append(check);
    }
    details.append(summary,body);line.append(choose,details);card.append(line);$('moments').append(card);
   }
