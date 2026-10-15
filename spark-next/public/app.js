@@ -11,7 +11,29 @@ const reasoningExplainers={
  'Decision under uncertainty':'Choose a defensible action when evidence is incomplete, and explain what additional information might change the choice.'
 };
 const $=id=>document.getElementById(id);
-const sessionId=crypto.randomUUID();let moments=[],lessonId=crypto.randomUUID();
+const sessionId=crypto.randomUUID();let moments=[],lessonId=crypto.randomUUID();let builtIds='';
+function showPage(page){
+ for(const [id,number] of [['source',1],['opportunities',2],['result',3]])$(id).hidden=id!==page;
+ const n={source:1,opportunities:2,result:3}[page];
+ for(let i=1;i<=3;i++)$('step'+i).classList.toggle('current',i===n);
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+function selection(){
+ const ids=[...$('moments').querySelectorAll('input[type=checkbox]:checked')].map(x=>x.value);
+ const selected=moments.filter(x=>ids.includes(x.id));
+ const time=selected.reduce((n,m)=>n+Math.max(0,Number(m.minutes)||0),0);
+ $('selectedCount').textContent=ids.length+' selected';
+ $('totalTime').textContent='~'+time+' min additional';
+ $('build').disabled=!ids.length;
+ return {ids,selected,time};
+}
+$('back2').onclick=()=>showPage('source');
+$('editSelections').onclick=()=>showPage('opportunities');
+$('copyPlan').onclick=()=>{
+ const text=['Teacher facilitation', $('teacher').textContent,'Student reasoning',$('student').textContent,'Integration notes',$('notes').textContent].join('\n\n');
+ navigator.clipboard.writeText(text).catch(()=>{$('buildStatus').textContent='Copy unavailable; select and copy the text manually.';});
+};
+
 async function call(data){const r=await fetch('/.netlify/functions/api',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,lessonId,...data})});const type=r.headers.get('content-type')||'';if(!type.includes('application/json'))throw Error('SPARK API unavailable: server returned a webpage (HTTP '+r.status+'). Verify function routing and access permissions.');const result=await r.json();if(!r.ok||!result.ok)throw Error(result.error||'Request failed');return result;}
 function status(text){$('state').textContent=text;}
 $('analyze').onclick=async()=>{
@@ -25,9 +47,9 @@ $('analyze').onclick=async()=>{
    const line=document.createElement('div');line.className='moment-head';
    const choose=document.createElement('input');choose.type='checkbox';choose.value=m.id;choose.setAttribute('aria-label','Select '+m.title);
    const details=document.createElement('details');details.className='moment-details';
-   const summary=document.createElement('summary');const title=document.createElement('strong');title.textContent=m.title;
-   const sub=document.createElement('span');sub.className='moment-meta';sub.textContent=m.construct+' · '+m.minutes+' extra min';
-   summary.append(title,sub);
+   const summary=document.createElement('summary');const title=document.createElement('strong');title.textContent=m.construct+': '+m.title;
+   const sub=document.createElement('span');sub.className='moment-meta';sub.textContent='Reasoning type: '+m.construct+' · ~'+m.minutes+' min additional';
+   summary.append(title,sub);choose.addEventListener('change',()=>{selection();builtIds='';});
    const body=document.createElement('div');body.className='moment-body';
    const add=(name,value)=>{if(!value)return;const p=document.createElement('p'),b=document.createElement('b');b.textContent=name+': ';p.append(b,document.createTextNode(String(value)));body.append(p);};
    add('Suggested teacher move',m.reasoning_move||m.teacher_prompt);
@@ -44,17 +66,17 @@ $('analyze').onclick=async()=>{
    }
    details.append(summary,body);line.append(choose,details);card.append(line);$('moments').append(card);
   }
-  $('opportunities').hidden=false;status('Saved '+moments.length+' generated opportunities · '+r.versions.build);
+  showPage('opportunities');selection();status('Saved '+moments.length+' generated opportunities · '+r.versions.build);
  }catch(e){status('Not completed: '+e.message);}finally{button.disabled=false;}
 };
 $('build').onclick=async()=>{
- const ids=[...$('moments').querySelectorAll('input:checked')].map(x=>x.value);
- if(!ids.length){status('Select at least one reasoning opportunity');return;}
- const selected=moments.filter(x=>ids.includes(x.id));const btn=$('build');btn.disabled=true;status('Building a minimal teaching plan and saving it…');
+ const {ids,selected,time}=selection();
+ if(!ids.length){$('buildStatus').textContent='Select at least one reasoning opportunity';return;}
+ const btn=$('build');btn.disabled=true;$('buildStatus').textContent='Building the teaching plan…';
  try{
   await call({action:'event',eventType:'moments_selected',ids});
-  const r=await call({action:'build',selected,grade:$('grade').value,budget:$('budget').value});
+  const r=await call({action:'build',selected,grade:$('grade').value,budget:time});
   $('teacher').textContent=r.activity.teacher_view;$('student').textContent=r.activity.student_view;$('notes').textContent=r.activity.integration_notes;
-  $('result').hidden=false;status('Activity generated and saved to research database.');
- }catch(e){status('Not completed: '+e.message);}finally{btn.disabled=false;}
+  $('planTime').textContent='~'+time+' min additional';builtIds=ids.join(',');showPage('result');$('buildStatus').textContent='Teaching plan generated and saved.';
+ }catch(e){$('buildStatus').textContent='Could not build plan: '+e.message;}finally{btn.disabled=false;}
 };
