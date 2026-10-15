@@ -1,0 +1,29 @@
+name: SPARK browser smoke test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Install browser test dependencies
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Open existing SPARK deployment in Chromium
+        env:
+          SPARK_DEPLOYMENT_ID: ${{ secrets.SPARK_DEPLOYMENT_ID }}
+        run: node scripts/smoke-spark-browser.mjs
+      - name: Preserve safe browser outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spark-browser-smoke-${{ github.run_id }}
+          path: release-probe/browser-result.json
+          if-no-files-found: ignore
+          retention-days: 14
