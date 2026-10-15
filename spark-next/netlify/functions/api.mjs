@@ -29,7 +29,9 @@ function decodeEntities(s){return s.replace(/&nbsp;|&#160;/gi,' ').replace(/&amp
 async function extractPublicLesson(url){
  let u;try{u=new URL(url);}catch{throw Error('Invalid lesson URL');}
  if(u.protocol!=='https:'||u.username||u.password||u.port||!sourceHosts.has(u.hostname.toLowerCase()))throw Error('URL import currently supports selected public educational sites only. Paste lesson text for other sources.');
- const response=await fetch(u.toString(),{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'text/html'}});
+ let response;
+ try{response=await fetch(u.toString(),{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'text/html'}});}
+ catch{throw Error('This website could not be retrieved directly (it may redirect or block automated access).');}
  if(!response.ok)throw Error('Lesson website returned HTTP '+response.status);
  if(!(response.headers.get('content-type')||'').includes('text/html'))throw Error('Lesson URL did not return HTML');
  const length=Number(response.headers.get('content-length')||0);
@@ -79,7 +81,7 @@ export default async function(req){
  }catch(e){
   console.error('SPARK function failure',String(e?.message||e));
   const message=String(e?.message||'');
-  if(/^(URL import currently supports|Invalid lesson URL|Lesson website returned HTTP|Lesson URL did not return HTML|Lesson page is too large|Could not extract enough lesson text)/.test(message)){
+  if(/^(URL import currently supports|Invalid lesson URL|Lesson website returned HTTP|Lesson URL did not return HTML|Lesson page is too large|Could not extract enough lesson text|This website could not be retrieved directly)/.test(message)){
    return respond({error:message+' You can paste the relevant lesson text instead.',code:'SOURCE_IMPORT_FAILED'},422);
   }
   return respond({error:'The request could not be completed. Any generated result has not been confirmed as saved. Check the function logs.',code:'SERVICE_ERROR'},503);
