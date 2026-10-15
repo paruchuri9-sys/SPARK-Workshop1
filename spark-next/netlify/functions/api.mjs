@@ -1,6 +1,6 @@
 import {getDatabase} from '@netlify/database';
 import crypto from 'node:crypto';
-const DESIGN='0.4.0', REASONER='0.4.0-activation-alpha', BUILD=process.env.COMMIT_REF||'local';
+const DESIGN='0.5.0-demo', REASONER='0.4.0-activation-alpha', BUILD=process.env.COMMIT_REF||'local';
 const allowed=new Set(['session_started','opportunities_generated','moments_selected','activity_generated','teacher_feedback','api_error']);
 const cors={'content-type':'application/json','cache-control':'no-store'};
 function respond(body,status=200){return new Response(JSON.stringify(body),{status,headers:cors});}
@@ -66,8 +66,8 @@ export default async function(req){
   if(q.action==='build'){
    const selected=q.selected;
    if(!Array.isArray(selected)||selected.length<1||selected.length>5||selected.some(m=>!m||typeof m.title!=='string'||typeof m.reasoning_move!=='string'))return respond({error:'Choose 1-5 valid moments'},400);
-   const budget=Math.max(5,Math.min(120,Number(q.budget)||30));
-   const result=await model([{role:'system',content:'Generate one MINIMUM-ADDITION integrated teaching plan from selected SPARK reasoning opportunities, not a replacement lesson or generic standalone exercise. Preserve existing tasks. Teacher_view: exact placement and concise teacher wording for each selected move, the sequence, connection cues, and optional quick checks only where justified. Student_view: the reasoning students should perform and what brief observable responses would show. integration_notes: estimated total ADDITIONAL minutes and feasibility given the budget, what is already in the lesson, and any tradeoffs to avoid overload. If selected estimated minutes exceed budget, prioritize essentials and explicitly state what was omitted. Do not claim evidence of transfer from a short check. Provide teacher_view, student_view, integration_notes.'},{role:'user',content:JSON.stringify({grade:q.grade||'middle school',budget,selected})}],buildSchema);
+   const budget=Math.max(0,Math.min(120,Number(q.budget)||0));
+   const result=await model([{role:'system',content:'Generate one MINIMUM-ADDITION integrated teaching plan from selected SPARK reasoning opportunities, not a replacement lesson or generic standalone exercise. Preserve existing tasks. Teacher_view: exact placement and concise teacher wording for each selected move, the sequence, connection cues, and optional quick checks only where justified. Student_view: the reasoning students should perform and what brief observable responses would show. integration_notes: estimated total ADDITIONAL minutes and feasibility given the budget, what is already in the lesson, and any tradeoffs to avoid overload. The supplied duration is the sum of estimated incremental minutes; use approximately (not exactly) this amount and avoid inventing longer activities. Clearly distinguish approximate extra time from actual session duration. If moves overlap, explain the savings. Do not claim evidence of transfer from a short check. Provide teacher_view, student_view, integration_notes.'},{role:'user',content:JSON.stringify({grade:q.grade||'middle school',budget,selected})}],buildSchema);
    await record(session,'activity_generated',lessonId,{moment_ids:selected.map(x=>x.id),budget,activity:result});
    return respond({ok:true,logged:true,activity:result});
   }
