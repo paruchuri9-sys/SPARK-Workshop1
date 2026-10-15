@@ -52,6 +52,19 @@ jobs:
           mkdir -p .spark-clasp
           cp selected-source/apps-script-mvp/Code.gs selected-source/apps-script-mvp/Index.html apps-script-mvp/appsscript.json .spark-clasp/
           node -e "require('fs').writeFileSync('.spark-clasp/.clasp.json',JSON.stringify({scriptId:process.env.SCRIPT_ID,rootDir:'.'}))"
+      - name: Preflight target and record current deployment
+        working-directory: .spark-clasp
+        env:
+          DEPLOYMENT_ID: ${{ secrets.SPARK_DEPLOYMENT_ID }}
+        run: |
+          set -euo pipefail
+          clasp deployments > ../spark-deployments-before.txt
+          if ! grep -Fq "$DEPLOYMENT_ID" ../spark-deployments-before.txt; then
+            echo "::error::Deployment ID not found in the authorized Script ID. No release published."
+            exit 1
+          fi
+          echo "Target deployment belongs to the authenticated Apps Script project." >> "$GITHUB_STEP_SUMMARY"
+          echo "Record previous deployment version from Apps Script Manage deployments for rollback." >> "$GITHUB_STEP_SUMMARY"
       - name: Deploy to existing URL
         working-directory: .spark-clasp
         env:
@@ -63,3 +76,25 @@ jobs:
           clasp push --force
           clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "$NOTE"
           clasp deployments
+          {
+            echo "### SPARK release"
+            echo "Source: ${{ inputs.source }}"
+            echo "Source commit: $(git -C ../selected-source rev-parse HEAD)"
+            echo "Reason: $NOTE"
+            echo "Deployment URL: https://script.google.com/macros/s/$DEPLOYMENT_ID/exec"
+            echo "Inspect the published version above; validate the live UI manually before declaring success."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Accessibility smoke test
+        env:
+          DEPLOYMENT_ID: ${{ secrets.SPARK_DEPLOYMENT_ID }}
+        run: |
+          set -euo pipefail
+          URL="https://script.google.com/macros/s/$DEPLOYMENT_ID/exec"
+          code=$(curl --location --silent --show-error --max-time 45 --output response.html --write-out '%{http_code}' "$URL")
+          echo "Anonymous GET HTTP status: $code" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$code" != "200" ]] || grep -Eiq 'Sorry, unable to open the file at this time|You need access|Sign in to continue' response.html; then
+            echo "::error::Published web app did not pass anonymous HTTP/accessibility check"
+            exit 1
+          fi
+          echo "HTTP/accessibility probe passed. Manual browser and Uncover → Select → Build tests still required." >> "$GITHUB_STEP_SUMMARY"
