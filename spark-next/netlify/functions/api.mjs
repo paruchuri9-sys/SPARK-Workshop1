@@ -65,9 +65,9 @@ export default async function(req){
   }
   if(q.action==='build'){
    const selected=q.selected;
-   if(!Array.isArray(selected)||selected.length<1||selected.length>5||selected.some(m=>!m||typeof m.title!=='string'||typeof m.teacher_prompt!=='string'))return respond({error:'Choose 1-5 valid moments'},400);
+   if(!Array.isArray(selected)||selected.length<1||selected.length>5||selected.some(m=>!m||typeof m.title!=='string'||typeof m.reasoning_move!=='string'))return respond({error:'Choose 1-5 valid moments'},400);
    const budget=Math.max(5,Math.min(120,Number(q.budget)||30));
-   const result=await model([{role:'system',content:'Generate one classroom-ready integrated activity combining the selected SPARK consequential reasoning opportunities. Use explicit teacher facilitation, student tasks, source evidence, decision under uncertainty, and rationale. Respect time budget. Provide teacher_view, student_view, integration_notes. Do not make unsupported lesson claims.'},{role:'user',content:JSON.stringify({grade:q.grade||'middle school',budget,selected})}],buildSchema);
+   const result=await model([{role:'system',content:'Generate one MINIMUM-ADDITION integrated teaching plan from selected SPARK reasoning opportunities, not a replacement lesson or generic standalone exercise. Preserve existing tasks. Teacher_view: exact placement and concise teacher wording for each selected move, the sequence, connection cues, and optional quick checks only where justified. Student_view: the reasoning students should perform and what brief observable responses would show. integration_notes: estimated total ADDITIONAL minutes and feasibility given the budget, what is already in the lesson, and any tradeoffs to avoid overload. If selected estimated minutes exceed budget, prioritize essentials and explicitly state what was omitted. Do not claim evidence of transfer from a short check. Provide teacher_view, student_view, integration_notes.'},{role:'user',content:JSON.stringify({grade:q.grade||'middle school',budget,selected})}],buildSchema);
    await record(session,'activity_generated',lessonId,{moment_ids:selected.map(x=>x.id),budget,activity:result});
    return respond({ok:true,logged:true,activity:result});
   }
@@ -77,4 +77,4 @@ export default async function(req){
   return respond({error:'Request failed; no research result is confirmed as saved. Check server configuration and logs.'},503);
  }
 }
-export const config={path:'/api/spark'};
+
