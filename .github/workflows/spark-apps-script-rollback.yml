@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: spark-production
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - run: npm install --global @google/clasp@3
