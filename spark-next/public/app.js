@@ -28,6 +28,8 @@ function selection(){
  return {ids,selected,time};
 }
 $('back2').onclick=()=>showPage('source');
+$('lessonPdf').addEventListener('change',()=>{$('clearPdf').hidden=!$('lessonPdf').files.length;});
+$('clearPdf').onclick=()=>{$('lessonPdf').value='';$('clearPdf').hidden=true;};
 $('editSelections').onclick=()=>showPage('opportunities');
 $('printPlan').onclick=()=>window.print();
 $('copyPlan').onclick=()=>{
@@ -59,7 +61,7 @@ function renderPlan(plan,selected){
 }
 
 
-async function call(data){const r=await fetch('/.netlify/functions/api',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,lessonId,...data})});const type=r.headers.get('content-type')||'';if(!type.includes('application/json'))throw Error(data.lessonUrl?'This webpage could not be accessed. Please upload a PDF or paste the lesson content.':'The lesson could not be processed right now. Please retry, or paste the lesson content.');const result=await r.json();if(!r.ok||!result.ok)throw Error(result.error||'Request failed');return result;}
+async function call(data){const r=await fetch('/.netlify/functions/api',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,lessonId,...data})});const type=r.headers.get('content-type')||'';if(!type.includes('application/json'))throw Error(data.lessonUrl?'This webpage could not be accessed. Please upload a PDF or paste the lesson content.':data.pdfBase64?'This PDF could not be processed. Please remove it and try another PDF, or paste the lesson content.':'The lesson could not be processed right now. Please retry, or paste the lesson content.');const result=await r.json();if(!r.ok||!result.ok)throw Error(result.code==='SOURCE_IMPORT_FAILED'?'The webpage or PDF could not be accessed or read. Please upload a PDF or paste the lesson content.':result.error||'Request failed');return result;}
 function status(text){$('state').textContent=text;}
 $('analyze').onclick=async()=>{
  const button=$('analyze');button.disabled=true;status('Analyzing lesson and saving research events…');$('result').hidden=true;
