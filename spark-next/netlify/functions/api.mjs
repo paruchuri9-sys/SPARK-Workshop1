@@ -21,7 +21,27 @@ async function model(messages,schema){
   const data=await r.json();return JSON.parse(data.choices[0].message.content);
  }finally{clearTimeout(timer);}
 }
-const opportunitiesSchema={type:'object',additionalProperties:false,required:['moments'],properties:{moments:{type:'array',items:{type:'object',additionalProperties:false,required:['id','title','where','construct','explanation','coverage','evidence','added_value','teacher_prompt','minutes'],properties:{id:{type:'string'},title:{type:'string'},where:{type:'string'},construct:{type:'string'},explanation:{type:'string'},coverage:{type:'string',enum:['uncovered','strengthened','already_present']},evidence:{type:'string'},added_value:{type:'string'},teacher_prompt:{type:'string'},minutes:{type:'integer'}}}}}};
+
+// Conservative v0 URL import: educational source allowlist, HTTPS only, no redirects.
+// Prevent arbitrary server-side URL fetching and inadvertent access to private services.
+const sourceHosts=new Set(['readwritethink.org','www.readwritethink.org','loc.gov','www.loc.gov','pbslearningmedia.org','www.pbslearningmedia.org','education.nationalgeographic.org']);
+function decodeEntities(s){return s.replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&#(\d+);/g,(_,n)=>String.fromCharCode(Number(n)));}
+async function extractPublicLesson(url){
+ let u;try{u=new URL(url);}catch{throw Error('Invalid lesson URL');}
+ if(u.protocol!=='https:'||u.username||u.password||u.port||!sourceHosts.has(u.hostname.toLowerCase()))throw Error('URL import currently supports selected public educational sites only. Paste lesson text for other sources.');
+ const response=await fetch(u.toString(),{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'text/html'}});
+ if(!response.ok)throw Error('Lesson website returned HTTP '+response.status);
+ if(!(response.headers.get('content-type')||'').includes('text/html'))throw Error('Lesson URL did not return HTML');
+ const length=Number(response.headers.get('content-length')||0);
+ if(length>1500000)throw Error('Lesson page is too large');
+ const html=(await response.text()).slice(0,1500000);
+ const main=html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1]||html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1]||html;
+ const plain=decodeEntities(main.replace(/<(script|style|nav|footer|header|svg)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim()).slice(0,30000);
+ if(!safeLesson(plain))throw Error('Could not extract enough lesson text. Paste the relevant portion instead.');
+ return plain;
+}
+
+const opportunitiesSchema={type:'object',additionalProperties:false,required:['moments'],properties:{moments:{type:'array',items:{type:'object',additionalProperties:false,required:['id','title','where','construct','explanation','coverage','evidence','added_value','teacher_prompt','minutes'],properties:{id:{type:'string'},title:{type:'string'},where:{type:'string'},construct:{type:'string',enum:['Evidence evaluation','Causal reasoning','Comparison and contrast','Perspective taking','Tradeoff analysis','Decision under uncertainty','Counterexample testing','Assumption testing','Systems reasoning','Argumentation']},explanation:{type:'string'},coverage:{type:'string',enum:['uncovered','strengthened','already_present']},evidence:{type:'string'},added_value:{type:'string'},teacher_prompt:{type:'string'},minutes:{type:'integer'}}}}}};
 const buildSchema={type:'object',additionalProperties:false,required:['teacher_view','student_view','integration_notes'],properties:{teacher_view:{type:'string'},student_view:{type:'string'},integration_notes:{type:'string'}}};
 export default async function(req){
  if(req.method!=='POST')return respond({error:'POST required'},405);
@@ -36,11 +56,12 @@ export default async function(req){
    await record(session,q.eventType,lessonId,p);return respond({ok:true,logged:true});
   }
   if(q.action==='analyze'){
-   if(!safeLesson(q.lesson))return respond({error:'Paste 80–30,000 characters of lesson text'},400);
-   const result=await model([{role:'system',content:'You are SPARK, a rigorous middle/high school instructional reasoning analyst. Given an existing lesson, identify 1-5 consequential reasoning opportunities, not mere reflection questions. Differentiate what is already present, what could be strengthened, and what is absent, supported by a brief quote or precise pointer to source lesson; do not invent source evidence. Suggest the smallest useful addition. Preserve historical accuracy, do not normalize discriminatory statements. Unique simple IDs M1...M5. minutes 5-30.'},{role:'user',content:JSON.stringify({grade:q.grade||'middle school',lesson:q.lesson})}],opportunitiesSchema);
+   const lessonText=q.lessonUrl?await extractPublicLesson(q.lessonUrl):q.lesson;
+   if(!safeLesson(lessonText))return respond({error:'Paste 80–30,000 characters of lesson text'},400);
+   const result=await model([{role:'system',content:'You are SPARK, a rigorous middle/high school instructional reasoning analyst. Given an existing lesson, identify 1-5 consequential reasoning opportunities, not mere reflection questions. Differentiate what is already present, what could be strengthened, and what is absent, supported by a brief quote or precise pointer to source lesson; do not invent source evidence. Suggest the smallest useful addition. Preserve historical accuracy, do not normalize discriminatory statements. Use exactly one reasoning construct label from: Evidence evaluation, Causal reasoning, Comparison and contrast, Perspective taking, Tradeoff analysis, Decision under uncertainty, Counterexample testing, Assumption testing, Systems reasoning, Argumentation. Treat these as preliminary operational labels, not proven measurement categories. Unique simple IDs M1...M5. minutes 5-30.'},{role:'user',content:JSON.stringify({grade:q.grade||'middle school',lesson:lessonText})}],opportunitiesSchema);
    if(!Array.isArray(result.moments)||result.moments.length<1||result.moments.length>5)throw Error('Invalid model moments');
    const moments=result.moments.map((m,i)=>({...m,id:'M'+(i+1),minutes:Math.max(5,Math.min(30,Number(m.minutes)||10))}));
-   await record(session,'opportunities_generated',lessonId,{moments});return respond({ok:true,logged:true,moments,versions:{design:DESIGN,reasoner:REASONER,build:BUILD}});
+   await record(session,'opportunities_generated',lessonId,{moments,source_type:q.lessonUrl?'url':'paste',source_host:q.lessonUrl?new URL(q.lessonUrl).hostname:null});return respond({ok:true,logged:true,moments,versions:{design:DESIGN,reasoner:REASONER,build:BUILD}});
   }
   if(q.action==='build'){
    const selected=q.selected;
