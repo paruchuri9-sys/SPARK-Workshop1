@@ -66,8 +66,8 @@ jobs:
           const sha=process.env.BUILD_SHA;
           const label='Build '+sha;
           if(!/^[a-f0-9]{12}$/.test(sha))throw Error('Invalid source commit ID');
-          const tag='<script>document.addEventListener("DOMContentLoaded",function(){var el=document.createElement("div");el.textContent='+JSON.stringify(label)+';el.style.cssText="font-size:12px;text-align:right;padding:8px 22px;color:#666";document.body.appendChild(el);});<\\/script>';
-          s=s.replace(/<\\/body>/i,tag+'\\n</body>');
+          const tag='<script>document.addEventListener("DOMContentLoaded",function(){var el=document.createElement("div");el.textContent='+JSON.stringify(label)+';el.style.cssText="font-size:12px;text-align:right;padding:8px 22px;color:#666";document.body.appendChild(el);});</script>';
+          if(!s.includes('</body>'))throw Error('HTML closing body absent'); s=s.replace('</body>',tag+'\\n</body>');
           fs.writeFileSync(p,s);
           NODE
           echo "Build commit: $BUILD_SHA" >> "$GITHUB_STEP_SUMMARY"
