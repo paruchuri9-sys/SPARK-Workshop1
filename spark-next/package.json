@@ -7,7 +7,8 @@
     "check": "node --check public/app.js && node --check netlify/functions/api.mjs"
   },
   "dependencies": {
-    "@netlify/database": "^2.0.1"
+    "@netlify/database": "^2.0.1",
+    "pdf-parse": "1.1.1"
   },
   "devDependencies": {
     "netlify-cli": "^26.0.0"
