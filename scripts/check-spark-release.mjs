@@ -7,7 +7,8 @@ const manifest=JSON.parse(fs.readFileSync('apps-script-mvp/appsscript.json','utf
 new vm.Script(code,{filename:'Code.gs'});
 assert.equal(manifest.runtimeVersion,'V8');
 for(const fn of ['doGet','api','mvpUncover_','mvpBuild_']) assert.ok(code.includes('function '+fn+'('),fn+' missing');
-for(const id of ['page1','page2','page3'])assert.ok(page.includes('id="'+id+'"'),id+' missing');
+const layouts=[['page1','page2','page3'],['p1','p2','p3']];
+assert.ok(layouts.some(ids=>ids.every(id=>page.includes('id="'+id+'"'))),'Expected complete three-page UI: page1/page2/page3 or p1/p2/p3');
 assert.ok(page.includes('google.script.run'),'Apps Script native RPC missing');
 const inline=[...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(x=>x[1]).filter(x=>x.trim());
 assert.ok(inline.length,'Client script missing');
