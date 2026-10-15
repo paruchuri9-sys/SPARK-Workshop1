@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const code=fs.readFileSync('apps-script-mvp/Code.gs','utf8');
+const page=fs.readFileSync('apps-script-mvp/Index.html','utf8');
+const manifest=JSON.parse(fs.readFileSync('apps-script-mvp/appsscript.json','utf8'));
+new vm.Script(code,{filename:'Code.gs'});
+assert.equal(manifest.runtimeVersion,'V8');
+for(const fn of ['doGet','api','mvpUncover_','mvpBuild_']) assert.ok(code.includes('function '+fn+'('),fn+' missing');
+for(const id of ['page1','page2','page3'])assert.ok(page.includes('id="'+id+'"'),id+' missing');
+assert.ok(page.includes('google.script.run'),'Apps Script native RPC missing');
+const inline=[...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(x=>x[1]).filter(x=>x.trim());
+assert.ok(inline.length,'Client script missing');
+for(const [i,s] of inline.entries())new vm.Script(s,{filename:'Index.html script '+(i+1)});
+console.log('PASS static checks: server, client, screens, manifest');

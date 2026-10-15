@@ -1,0 +1,42 @@
+name: SPARK Apps Script rollback
+on:
+  workflow_dispatch:
+    inputs:
+      previous_version:
+        type: string
+        required: true
+      reason:
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: spark-apps-script-production
+  cancel-in-progress: false
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: spark-production
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global @google/clasp@3
+      - name: Restore previous deployed version
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SPARK_SCRIPT_ID }}
+          DEPLOYMENT_ID: ${{ secrets.SPARK_DEPLOYMENT_ID }}
+          VERSION: ${{ inputs.previous_version }}
+          NOTE: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+$ ]]
+          test -n "$SCRIPT_ID" && test -n "$DEPLOYMENT_ID" && test -n "$CLASPRC_JSON"
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          mkdir -p rollback
+          cd rollback
+          node -e "require('fs').writeFileSync('.clasp.json',JSON.stringify({scriptId:process.env.SCRIPT_ID,rootDir:'.'}))"
+          clasp deploy --deploymentId "$DEPLOYMENT_ID" --versionNumber "$VERSION" --description "Rollback: $NOTE"
+          clasp deployments

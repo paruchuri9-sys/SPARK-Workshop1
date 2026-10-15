@@ -1,0 +1,16 @@
+name: SPARK Apps Script CI
+on:
+  pull_request:
+    paths: ['apps-script-mvp/**', '.github/workflows/spark-*', 'scripts/check-spark-release.mjs']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-spark-release.mjs
