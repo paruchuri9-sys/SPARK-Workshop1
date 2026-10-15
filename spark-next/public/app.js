@@ -77,7 +77,8 @@ $('analyze').onclick=async()=>{
    summary.append(title,sub);choose.addEventListener('change',()=>{selection();builtIds='';});
    const body=document.createElement('div');body.className='moment-body';
    const add=(name,value)=>{if(!value)return;const p=document.createElement('p'),b=document.createElement('b');b.textContent=name+': ';p.append(b,document.createTextNode(String(value)));body.append(p);};
-   add('Suggested teacher move',m.reasoning_move||m.teacher_prompt);
+   add('Suggested question or adjustment',m.reasoning_move||m.teacher_prompt);
+   add('Time estimate (~'+m.minutes+' min)',m.time_rationale);
    add('Connect to another step',m.connection_cue);
    add('Possible transfer cue',m.transfer_cue);
    const info=document.createElement('details'),is=document.createElement('summary');is.textContent='Learn more: '+m.construct;info.append(is);const explanation=document.createElement('p');explanation.textContent=(reasoningExplainers[m.construct]||'Describe the reasoning operation and what students should do.')+' In this lesson: '+m.explanation;info.append(explanation);body.append(info);
