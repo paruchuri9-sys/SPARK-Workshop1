@@ -1,6 +1,6 @@
 import {getDatabase} from '@netlify/database';
 import crypto from 'node:crypto';
-const DESIGN='0.7.0-demo', REASONER='0.7.0-focused', BUILD=process.env.COMMIT_REF||'local';
+const DESIGN='0.8.0-demo', REASONER='0.7.0-focused', BUILD=process.env.COMMIT_REF||'local';
 const allowed=new Set(['session_started','opportunities_generated','moments_selected','activity_generated','teacher_feedback','api_error']);
 const cors={'content-type':'application/json','cache-control':'no-store'};
 function respond(body,status=200){return new Response(JSON.stringify(body),{status,headers:cors});}
@@ -26,6 +26,17 @@ async function model(messages,schema){
 // Prevent arbitrary server-side URL fetching and inadvertent access to private services.
 const sourceHosts=new Set(['readwritethink.org','www.readwritethink.org','loc.gov','www.loc.gov','pbslearningmedia.org','www.pbslearningmedia.org','education.nationalgeographic.org']);
 function decodeEntities(s){return s.replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&#(\d+);/g,(_,n)=>String.fromCharCode(Number(n)));}
+async function extractPdfLesson(pdfBase64){
+ if(typeof pdfBase64!=='string'||pdfBase64.length>5600000||! /^[A-Za-z0-9+/]*={0,2}$/.test(pdfBase64))throw Error('PDF is invalid or too large. Upload a PDF under 4 MB or paste the content.');
+ const buffer=Buffer.from(pdfBase64,'base64');
+ if(buffer.length>4*1024*1024||buffer.subarray(0,5).toString()!=='%PDF-')throw Error('The uploaded file is not a supported PDF.');
+ let parsed;
+ try{const pdfParse=(await import('pdf-parse')).default;parsed=await pdfParse(buffer,{max:80});}
+ catch{throw Error('PDF text could not be extracted. Please paste the lesson content.');}
+ const extracted=String(parsed.text||'').replace(/\s+/g,' ').trim().slice(0,30000);
+ if(!safeLesson(extracted))throw Error('This PDF has too little selectable text. Please paste the lesson content.');
+ return extracted;
+}
 async function extractPublicLesson(url){
  let u;try{u=new URL(url);}catch{throw Error('Invalid lesson URL');}
  if(u.protocol!=='https:'||u.username||u.password||u.port||!sourceHosts.has(u.hostname.toLowerCase()))throw Error('URL import currently supports selected public educational sites only. Paste lesson text for other sources.');
@@ -62,12 +73,12 @@ export default async function(req){
    await record(session,q.eventType,lessonId,p);return respond({ok:true,logged:true});
   }
   if(q.action==='analyze'){
-   const lessonText=q.lessonUrl?await extractPublicLesson(q.lessonUrl):q.lesson;
+   const lessonText=q.pdfBase64?await extractPdfLesson(q.pdfBase64):q.lessonUrl?await extractPublicLesson(q.lessonUrl):q.lesson;
    if(!safeLesson(lessonText))return respond({error:'Paste 80–30,000 characters of lesson text'},400);
    const result=await model([{role:'system',content:'You are SPARK, a rigorous middle/high school instructional reasoning analyst. Given an existing lesson, identify 1-5 consequential reasoning opportunities, not mere reflection questions. Differentiate what is already present, what could be strengthened, and what is absent, supported by a brief quote or precise pointer to source lesson; do not invent source evidence. Suggest the smallest useful addition. Preserve historical accuracy, do not normalize discriminatory statements. Use exactly one reasoning construct label from: Evidence evaluation, Causal reasoning, Comparison and contrast, Perspective taking, Tradeoff analysis, Decision under uncertainty, Counterexample testing, Assumption testing, Systems reasoning, Argumentation. Treat these as preliminary operational labels, not proven measurement categories. Identify opportunities that ALREADY exist: recognition is valuable, not a defect. For each give the smallest helpful teacher move (one question, short cue, or tiny process adjustment), explicit reasoning operation and why, no gratuitous links to other lesson steps or cross-context transfer suggestions; SPARK here focuses on situated activation, not curricular reinforcement. Do not merely praise an existing activity or relabel it: show what a teacher could SAY or DO, and where. Estimate ADDITIONAL minutes 0-10, not original lesson activity duration; use 0 when no change warranted. Estimate the extra time based on the operations required: a brief naming cue about 0-1 minute, targeted question about 1-2, justified comparison about 2-4, counterexample or revision about 3-6, and short application about 3-7. These are heuristic intervals, not measurements. For each opportunity give a concise time_rationale that explains the actual additional interaction expected (e.g., one question + pair explanation), not the whole existing activity. If no action is needed use 0. Avoid spurious specificity. The optional quick_check is one short, ready-to-use question using format multiple_choice, show_of_hands, or short_response only if it yields useful evidence of the targeted reasoning; otherwise empty string, format none and purpose none. Only generate a check if it truly asks students to USE the named reasoning operation. Avoid easy fact recall, self-reported confidence, leading yes/no votes, universal all-of-the-above options, and predetermined answers without a judgment. For multiple_choice, put the question and options in natural language without a format prefix, and include an evidence-based justification prompt. For show_of_hands, present contrasting plausible judgments and invite a reason, never ask merely who thinks they can do something. Never collect responses. Do not claim a quick response establishes independent transfer. Avoid extra activity creation and avoid cognitive overload. Unique IDs M1...M5.'},{role:'user',content:JSON.stringify({grade:q.grade||'middle school',lesson:lessonText})}],opportunitiesSchema);
    if(!Array.isArray(result.moments)||result.moments.length<1||result.moments.length>5)throw Error('Invalid model moments');
    const moments=result.moments.map((m,i)=>({...m,id:'M'+(i+1),minutes:Math.max(0,Math.min(10,Number(m.minutes)||0))}));
-   await record(session,'opportunities_generated',lessonId,{moments,source_type:q.lessonUrl?'url':'paste',source_host:q.lessonUrl?new URL(q.lessonUrl).hostname:null});return respond({ok:true,logged:true,moments,versions:{design:DESIGN,reasoner:REASONER,build:BUILD}});
+   await record(session,'opportunities_generated',lessonId,{moments,source_type:q.pdfBase64?'pdf':q.lessonUrl?'url':'paste',source_host:q.lessonUrl&&!q.pdfBase64?new URL(q.lessonUrl).hostname:null});return respond({ok:true,logged:true,moments,versions:{design:DESIGN,reasoner:REASONER,build:BUILD}});
   }
   if(q.action==='build'){
    const selected=q.selected;
@@ -81,7 +92,7 @@ export default async function(req){
  }catch(e){
   console.error('SPARK function failure',String(e?.message||e));
   const message=String(e?.message||'');
-  if(/^(URL import currently supports|Invalid lesson URL|Lesson website returned HTTP|Lesson URL did not return HTML|Lesson page is too large|Could not extract enough lesson text|This website could not be retrieved directly)/.test(message)){
+  if(/^(URL import currently supports|Invalid lesson URL|Lesson website returned HTTP|Lesson URL did not return HTML|Lesson page is too large|Could not extract enough lesson text|This website could not be retrieved directly|PDF is invalid|The uploaded file|PDF text could not|This PDF has too little)/.test(message)){
    return respond({error:message+' You can paste the relevant lesson text instead.',code:'SOURCE_IMPORT_FAILED'},422);
   }
   return respond({error:'The request could not be completed. Any generated result has not been confirmed as saved. Check the function logs.',code:'SERVICE_ERROR'},503);
