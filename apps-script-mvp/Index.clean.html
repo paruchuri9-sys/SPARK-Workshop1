@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SPARK Reasoning Opportunity Builder</title>
+  <style>
+    :root{--p:#582c83;--bg:#f6f4f8;--ink:#28242d;--muted:#6d6873;--line:#ddd7e3}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    header{background:var(--p);color:#fff;padding:18px 28px} header h1{margin:0;font-size:22px}
+    main{max-width:980px;margin:24px auto;padding:0 16px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
+    h2,h3{margin-top:0}.muted{color:var(--muted)} label{display:block;font-weight:700;margin:12px 0 6px}
+    input,textarea{width:100%;padding:10px;border:1px solid #bbb;border-radius:8px;font:inherit} textarea{min-height:150px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.times,.formats,.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    button{border:0;border-radius:8px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer}.primary{background:var(--p);color:#fff}.ghost{background:#eee7f3;color:var(--p)}
+    button.sel{outline:2px solid var(--p)} .hidden{display:none}.error{color:#a32222;background:#fff0f0;padding:10px;border-radius:8px;margin-top:10px}
+    .moment{border-left:5px solid var(--p)} .pill{display:inline-block;background:#fff6d8;padding:5px 8px;border-radius:999px;font-size:13px}
+    .row{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.busy{padding:12px;background:#eee7f3;border-radius:8px;margin-top:12px}
+    ul{padding-left:20px}.section{margin-top:18px}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}.row{display:block}}
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+<header><h1>SPARK · Reasoning Opportunity Builder</h1></header>
+<main>
+  <section id="p1">
+    <div class="card">
+      <h2>Bring an activity</h2>
+      <p class="muted">Paste a public lesson URL, upload a file, or paste the activity text.</p>
+
+      <label>Public lesson URL</label>
+      <input id="url" type="url" placeholder="https://...">
+
+      <label>Upload activity</label>
+      <input id="file" type="file" accept=".txt,.md,.pdf,.docx">
+      <div id="fileStatus" class="muted"></div>
+
+      <label>Or paste activity</label>
+      <textarea id="text" placeholder="Paste lesson, worksheet, activity, or scenario..."></textarea>
+
+      <div class="grid">
+        <div><label>Grade level or course</label><input id="grade" placeholder="Grade 8 U.S. History"></div>
+        <div><label>Subject</label><input id="subject" placeholder="Social Studies"></div>
+      </div>
+
+      <label>Additional class time</label>
+      <div class="times">
+        <button type="button" data-min="5">5 min</button>
+        <button type="button" data-min="10" class="sel">10 min</button>
+        <button type="button" data-min="20">20 min</button>
+        <button type="button" data-min="30">30+ min</button>
+      </div>
+
+      <details style="margin-top:14px">
+        <summary>Optional context</summary>
+        <label>Learning objective</label><input id="objective">
+        <label>Preserve</label><input id="preserve">
+        <label>Avoid</label><input id="avoid">
+      </details>
+
+      <div class="actions"><button id="find" class="primary">Find opportunities</button></div>
+      <div id="e1" class="error hidden"></div>
+      <div id="b1" class="busy hidden">SPARK is analyzing the activity…</div>
+    </div>
+  </section>
+
+  <section id="p2" class="hidden">
+    <div class="row"><div><h2>Choose a reasoning opportunity</h2><p class="muted">Select one worth the class time.</p></div><button id="back1" class="ghost">Change activity</button></div>
+    <div id="moments"></div>
+    <div id="selection" class="card hidden">
+      <strong id="selectedTitle"></strong>
+      <div class="formats">
+        <button type="button" data-format="discussion" class="sel">Discussion</button>
+        <button type="button" data-format="written">Written</button>
+        <button type="button" data-format="pairs_groups">Pairs / groups</button>
+        <button type="button" data-format="whole_class">Whole class</button>
+      </div>
+      <div class="actions"><button id="build" class="primary">Create activity</button></div>
+      <div id="e2" class="error hidden"></div>
+      <div id="b2" class="busy hidden">SPARK is building the activity…</div>
+    </div>
+  </section>
+
+  <section id="p3" class="hidden">
+    <div class="row"><div><h2>Your SPARK activity</h2></div><button id="back2" class="ghost">Choose another moment</button></div>
+    <div class="card"><div id="artifact"></div></div>
+  </section>
+</main>
+
+<script>
+(function(){
+  'use strict';
+  const one=s=>document.querySelector(s), all=s=>Array.from(document.querySelectorAll(s));
+  const st={sourceText:'',sourceUrl:'',fileName:'',grade:'',subject:'',time:10,objective:'',preserve:'',avoid:'',moments:[],selected:null,format:'discussion'};
+
+  function show(id){['#p1','#p2','#p3'].forEach(x=>one(x).classList.add('hidden'));one(id).classList.remove('hidden');window.scrollTo(0,0)}
+  function error(id,msg){const e=one(id);e.textContent=msg||'';e.classList.toggle('hidden',!msg)}
+  function call(action,payload){
+    return new Promise((resolve,reject)=>{
+      google.script.run
+        .withSuccessHandler(r=>r&&r.ok===false?reject(new Error(r.error||'Request failed')):resolve(r))
+        .withFailureHandler(err=>reject(new Error((err&&err.message)||String(err))))
+        .api(action,payload||{});
+    });
+  }
+  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+  all('[data-min]').forEach(b=>b.onclick=()=>{all('[data-min]').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');st.time=Number(b.dataset.min)});
+  all('[data-format]').forEach(b=>b.onclick=()=>{all('[data-format]').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');st.format=b.dataset.format;if(st.selected)st.selected.format=st.format});
+
+  one('#file').onchange=async ev=>{
+    error('#e1','');
+    const f=ev.target.files&&ev.target.files[0]; if(!f)return;
+    try{
+      one('#fileStatus').textContent='Reading '+f.name+'…';
+      const n=f.name.toLowerCase(); let text='';
+      if(n.endsWith('.txt')||n.endsWith('.md')) text=await f.text();
+      else if(n.endsWith('.docx')){
+        if(!window.mammoth)throw new Error('DOCX reader failed to load.');
+        text=(await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()})).value||'';
+      } else if(n.endsWith('.pdf')){
+        if(!window.pdfjsLib)throw new Error('PDF reader failed to load.');
+        pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+        for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i),c=await p.getTextContent();text+=c.items.map(x=>x.str).join(' ')+'\n';}
+      } else throw new Error('Use TXT, MD, PDF, or DOCX.');
+      one('#text').value=text; st.fileName=f.name;
+      one('#fileStatus').textContent=f.name+' · '+text.length.toLocaleString()+' characters extracted';
+    }catch(e){error('#e1',e.message);one('#fileStatus').textContent='Could not read file.'}
+  };
+
+  one('#find').onclick=async()=>{
+    error('#e1','');
+    st.sourceText=one('#text').value.trim(); st.sourceUrl=one('#url').value.trim(); st.grade=one('#grade').value.trim(); st.subject=one('#subject').value.trim();
+    st.objective=one('#objective').value.trim(); st.preserve=one('#preserve').value.trim(); st.avoid=one('#avoid').value.trim();
+    if(!st.sourceUrl&&st.sourceText.length<80){error('#e1','Upload or paste the activity, or provide a public lesson URL.');return}
+    if(st.sourceUrl&&!/^https?:\/\//i.test(st.sourceUrl)){error('#e1','Enter a full URL beginning with http:// or https://.');return}
+    if(!st.grade){error('#e1','Add the grade level or course.');return}
+    one('#b1').classList.remove('hidden');
+    try{
+      const r=await call('mvpUncover',{sourceText:st.sourceText,sourceUrl:st.sourceUrl,fileName:st.fileName,gradeCourse:st.grade,subject:st.subject,availableTime:st.time,objective:st.objective,preserve:st.preserve,avoid:st.avoid});
+      st.moments=r.moments||[]; renderMoments(); show('#p2');
+    }catch(e){error('#e1',e.message)} finally{one('#b1').classList.add('hidden')}
+  };
+
+  function renderMoments(){
+    one('#moments').innerHTML=st.moments.map((m,i)=>{
+      const opts=(m.options||[]).filter(o=>Number(o.minutes)<=st.time||st.time>=30).map(o=>'<button type="button" class="ghost" data-pick="'+i+'" data-minutes="'+o.minutes+'">'+o.minutes+' min · '+esc(o.label)+'</button>').join(' ');
+      return '<article class="card moment"><h3>'+(i+1)+'. '+esc(m.title)+'</h3><p><strong>Where:</strong> '+esc(m.source_location)+'</p><p><strong>Students currently:</strong> '+esc(m.current_task)+'</p><p><strong>Opportunity:</strong> '+esc(m.consequential_judgment)+'</p><p><strong>Why it matters:</strong> '+esc(m.why_it_matters)+'</p><span class="pill">'+esc(m.reasoning_focus)+'</span><div class="actions">'+opts+'</div></article>';
+    }).join('');
+    all('[data-pick]').forEach(b=>b.onclick=()=>{const m=st.moments[Number(b.dataset.pick)];st.selected={moment:m,minutes:Number(b.dataset.minutes),format:st.format,adjustment:''};one('#selectedTitle').textContent=m.title+' · about '+b.dataset.minutes+' minutes';one('#selection').classList.remove('hidden');window.scrollTo(0,document.body.scrollHeight)});
+  }
+
+  one('#build').onclick=async()=>{
+    if(!st.selected)return;
+    error('#e2',''); one('#b2').classList.remove('hidden');
+    try{
+      const r=await call('mvpBuild',{sourceText:st.sourceText,sourceUrl:st.sourceUrl,fileName:st.fileName,gradeCourse:st.grade,subject:st.subject,objective:st.objective,preserve:st.preserve,avoid:st.avoid,selectedMoment:st.selected.moment,minutes:st.selected.minutes,format:st.format,adjustment:''});
+      renderArtifact(r.artifact||{}); show('#p3');
+    }catch(e){error('#e2',e.message)} finally{one('#b2').classList.add('hidden')}
+  };
+
+  function list(title,arr){return '<div class="section"><h3>'+esc(title)+'</h3><ul>'+((arr||[]).map(x=>'<li>'+esc(x)+'</li>').join(''))+'</ul></div>'}
+  function renderArtifact(a){
+    one('#artifact').innerHTML='<h3>Teacher View</h3><p><strong>Purpose:</strong> '+esc(a.teacher&&a.teacher.purpose)+'</p><p><strong>Where to insert:</strong> '+esc(a.teacher&&a.teacher.where_to_insert)+'</p>'+list('Preparation / materials',a.teacher&&a.teacher.preparation)+list('Facilitation',a.teacher&&a.teacher.facilitation)+list('Exact prompts',a.teacher&&a.teacher.prompts)+list('What to look for',a.teacher&&a.teacher.look_for)+'<hr><h3>Student View</h3>'+list('Instructions',a.student&&a.student.instructions)+list('Evidence / information',a.student&&a.student.evidence)+list('Questions',a.student&&a.student.questions);
+  }
+
+  one('#back1').onclick=()=>show('#p1');
+  one('#back2').onclick=()=>show('#p2');
+})();
+</script>
+</body>
+</html>
