@@ -285,7 +285,7 @@ $("#inspectData").addEventListener("click",async()=>{
 function refreshPurgeEnabled(){
  const ready=!!(isOwner && downloadState.responses!==null && downloadState.exits!==null &&
   $("#confirmReviewed").checked && $("#confirmCompleted").checked &&
-  $("#confirmCode").value.trim().toUpperCase()===sessionId && !state.archived);
+  $("#confirmCode").value.trim().toUpperCase()===sessionId && !state.purgedAt);
  $("#purgeStudentData").disabled=!ready;
 }
 ["#confirmReviewed","#confirmCompleted","#confirmCode"].forEach(selector=>{
@@ -299,19 +299,19 @@ $("#purgeStudentData").addEventListener("click",async()=>{
  $("#purgeStatus").textContent="Comparing current Firebase records with downloaded exports...";
  try{
   await verifyOwner();
-  const [rr,tt,st]=await Promise.all([
-   get(ref(db,"responses/"+sessionId)),
-   get(ref(db,"exitTickets/"+sessionId)),
-   get(ref(db,"sessions/"+sessionId+"/state"))
-  ]);
-  if(st.val()?.archived)throw Error("Session already archived. Contact SPARK before repeating cleanup.");
-  if(JSON.stringify(rr.val()||{})!==downloadState.responses ||
-     JSON.stringify(tt.val()||{})!==downloadState.exits){
-   downloadState.responses=null;downloadState.exits=null;
-   throw Error("Data changed since export. Download and review BOTH files again before deleting.");
+  const st=await get(ref(db,"sessions/"+sessionId+"/state"));
+  if(st.val()?.purgedAt)throw Error("Student data was already cleared.");
+  if(st.val()?.separateModerators)throw Error("Independent group data paths require a separate audited export and purge. Do not delete this session here.");
+  if(!st.val()?.archived){
+   $("#purgeStatus").textContent="Archiving session to stop new submissions...";
+   await update(ref(db,"sessions/"+sessionId+"/state"),{archived:true,locked:true,timerEnd:null,timerPausedRemaining:null});
   }
-  $("#purgeStatus").textContent="Archiving session to stop new submissions...";
-  await update(ref(db,"sessions/"+sessionId+"/state"),{archived:true,locked:true,timerEnd:null,timerPausedRemaining:null});
+  const [frozenResponses,frozenTickets]=await Promise.all([get(ref(db,"responses/"+sessionId)),get(ref(db,"exitTickets/"+sessionId))]);
+  if(JSON.stringify(frozenResponses.val()||{})!==downloadState.responses ||
+     JSON.stringify(frozenTickets.val()||{})!==downloadState.exits){
+   downloadState.responses=null;downloadState.exits=null;
+   throw Error("Data changed since export. Collection is now frozen; download and inspect BOTH current files again, then repeat the deletion confirmation.");
+  }
   $("#purgeStatus").textContent="Removing student records...";
   await update(ref(db),{
    ["responses/"+sessionId]:null,
@@ -325,6 +325,7 @@ $("#purgeStudentData").addEventListener("click",async()=>{
    get(ref(db,"sessions/"+sessionId+"/presence"))
   ]);
   if(a.exists()||b.exists()||c.exists())throw Error("Deletion verification failed. Do not assume records were cleared.");
+  await update(ref(db,"sessions/"+sessionId+"/state"),{purgedAt:Date.now()});
   $("#purgeStatus").textContent="Verified: student responses, exit tickets and presence records removed. This class is archived; keep your approved CSV files in secure storage.";
   $("#exportResponses").disabled=true;$("#exportExitTickets").disabled=true;
   $("#purgeStudentData").disabled=true;
