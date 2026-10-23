@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SPARK · Meeting Organizer</title><link rel="stylesheet" href="schedule.css"></head><body>
+<header><div class="brand">SPARK <span>Meeting organizer · private</span></div></header>
+<main class="wrap">
+<div id="organizerStatus" class="panel subtle" role="status">Connecting…</div>
+<section id="createPanel" class="panel" hidden><div class="eyebrow">CREATE A NEW POLL</div><h1>Meeting scheduling</h1><p>Set the meeting details and click Create. The new poll will have a shareable participant link and a separate organizer view. Keep using this same browser to see names and download responses.</p>
+<form id="createForm">
+ <label class="strong" for="title">Meeting name</label><input id="title" required maxlength="120" value="SPARK Core Educators Meeting">
+ <div class="controls-grid">
+ <div><label class="strong" for="date1">First date</label><input type="date" id="date1" value="2026-10-28" required></div>
+ <div><label class="strong" for="date2">Second date</label><input type="date" id="date2" value="2026-10-29" required></div>
+ <div><label class="strong" for="start">First slot starts</label><select id="start"><option value="14">2:00 PM</option><option value="13">1:00 PM</option><option value="15">3:00 PM</option><option value="9">9:00 AM</option><option value="10">10:00 AM</option></select></div>
+ <div><label class="strong" for="end">Last slot starts</label><select id="end"><option value="19">7:00 PM</option><option value="18">6:00 PM</option><option value="17">5:00 PM</option><option value="16">4:00 PM</option></select></div>
+ </div>
+ <label class="strong" for="preferred">Preferred day</label><select id="preferred"><option value="second">Second date (Thursday, October 29)</option><option value="first">First date</option><option value="none">No preference</option></select>
+ <label class="strong" for="question">Optional question (Yes / Maybe / No)</label><textarea id="question" rows="3" required>Would you be able to test the SPARK classroom scenario and share your findings with your class before Thursday? This is optional.</textarea>
+ <div class="actions"><button id="createButton" class="primary" type="submit">Create meeting poll</button><span id="createStatus"></span></div>
+ </form></section>
+<section id="managePanel" hidden>
+ <div class="panel"><div class="eyebrow">ORGANIZER VIEW</div><h1 id="pollTitle">Meeting poll</h1><p class="info"><strong>Private organizer access:</strong> This browser owns the poll. Do not clear its site storage until after exporting responses. Sharing this page's URL does not grant access to names.</p>
+ <p class="strong">Teacher response link</p><input id="publicLink" readonly><div class="actions"><button id="copyLink">Copy teacher link</button><button id="exportCSV">Download responses (CSV)</button><span id="copyStatus" role="status"></span></div></div>
+ <div class="panel"><h2>Availability totals</h2><div id="totals"></div></div>
+ <div class="panel"><h2>Individual responses</h2><p class="subtle" id="responseCount"></p><div class="table-scroll"><table><thead id="responseHead"></thead><tbody id="responseRows"></tbody></table></div></div>
+</section>
+</main><script type="module" src="schedule-admin.js"></script></body></html>
