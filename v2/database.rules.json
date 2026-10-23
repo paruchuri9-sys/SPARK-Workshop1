@@ -38,7 +38,7 @@
         ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
         "$ticketId": {
           ".write": "auth != null && root.child('sessions').child($sessionId).child('state').exists() && !data.exists()",
-          ".validate": "newData.hasChildren(['q1','q2','q3','q4','q5']) && newData.childrenCount === 5",
+          ".validate": "newData.hasChildren(['q1','q2','q3','q4','q5'])",
           "q1": {
             ".validate": "newData.isString() && newData.val().length <= 1200"
           },
@@ -53,6 +53,9 @@
           },
           "q5": {
             ".validate": "newData.isString() && newData.val().length <= 1200"
+          },
+          "$other": {
+            ".validate": false
           }
         }
       }
