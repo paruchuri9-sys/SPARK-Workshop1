@@ -37,7 +37,8 @@
           "$groupId": {
             ".read": "auth != null",
             ".write": "auth != null && (root.child('sessions').child($sessionId).child('owner').val() === auth.uid || root.child('sessions').child($sessionId).child('groupModerators').child($groupId).child('uid').val() === auth.uid)"
-          }
+          },
+          ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid"
         },
         "groupPublished": {
           "$groupId": {
