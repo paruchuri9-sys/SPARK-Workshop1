@@ -59,7 +59,7 @@ if (previewMode) {
   $("#status").textContent = "PREVIEW MODE";
   renderTabs(); render(); startTimer();
 } else if(db && stateRef) {
-  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
+  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); else if(SCENARIO.tabs[activeTab]?.id==="final" && myResponses.final?.updatedAt && !document.querySelector("#exitTicketForm") && exitStatus!=="submitted" && exitStatus!=="skipped"){storeDraft();render();} }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
   onValue(ref(db,".info/serverTimeOffset"), snap => {serverOffset=snap.val()||0;});
   onValue(stateRef, snap => {
     if(!snap.exists()) { $("#status").textContent="Session not found";return; }
@@ -213,7 +213,7 @@ function exitTicketHtml(){
  const unlocked=!!myResponses.final?.updatedAt;
  return '<section class="card exit-ticket" id="exitSection"><h2>Help us improve SPARK</h2><p class="muted">Optional feedback. We do not ask for your name, and this form is saved separately from your scenario answers. Please do not include names or identifying details. You can skip it.</p>'+
  (unlocked?'<form id="exitTicketForm">'+prompts.map((q,i)=>'<label for="exitQ'+(i+1)+'">'+(i+1)+'. '+esc(q)+'</label><textarea id="exitQ'+(i+1)+'" maxlength="1200" rows="3"></textarea>').join('')+
- '<div class="actions"><button class="primary" type="submit" id="exitSubmit">Send anonymous feedback</button><button class="secondary" type="button" id="exitSkip">Skip feedback</button><span id="exitMessage" role="status"></span></div></form>':
+ '<div class="actions"><button class="primary" type="submit" id="exitSubmit">Send feedback</button><button class="secondary" type="button" id="exitSkip">Skip feedback</button><span id="exitMessage" role="status"></span></div></form>':
  '<p class="muted">First save your final decision above. Then these optional feedback questions will appear.</p>')+'</section>';
 }
 function wireExitTicket(){
