@@ -44,8 +44,9 @@ if (!previewMode) {
   const aliasKey = "sparkAlias_"+sessionId;
   let alias = sessionStorage.getItem(aliasKey);
   if(!alias){ const animals=["Heron","Fox","Owl","Otter","Raven","Falcon","Turtle","Robin"];const bytes=new Uint8Array(3);crypto.getRandomValues(bytes);alias=animals[bytes[0]%animals.length]+"-"+String((bytes[1]*256+bytes[2])%900+100);sessionStorage.setItem(aliasKey,alias); }
-  await update(ref(db, responseBase+"/participant"), {nickname:alias,group:groupParam});
-  if(groupResponseBase)await update(ref(db,groupResponseBase+"/participant"),{nickname:alias,group:groupParam});
+  const participantRecord={nickname:alias,group:groupParam};
+  if(groupResponseBase){const updates={};updates[responseBase+"/participant"]=participantRecord;updates[groupResponseBase+"/participant"]=participantRecord;await update(ref(db),updates);}
+  else await update(ref(db,responseBase+"/participant"),participantRecord);
   onValue(ref(db, ".info/connected"), async snap => {
     if(snap.val()!==true)return;
     try { await onDisconnect(presenceRef).remove();
@@ -99,8 +100,8 @@ $("#resetParticipant").addEventListener("click", async () => {
   }
 
   try {
-    await remove(ref(db, responseBase));
-    if(groupResponseBase)await remove(ref(db,groupResponseBase));
+    if(groupResponseBase){const updates={};updates[responseBase]=null;updates[groupResponseBase]=null;await update(ref(db),updates);}
+    else await remove(ref(db,responseBase));
     for(const t of SCENARIO.tabs)discardDraft(t.id);
     renderTabs();
     render();
@@ -136,7 +137,7 @@ async function save(stage, payload){
     if(btn) btn.disabled=false;
     return;
   }
-  try { const saved={...payload, updatedAt:serverTimestamp()};await update(ref(db, `${responseBase}/${stage}`),saved);if(groupResponseBase)await update(ref(db,`${groupResponseBase}/${stage}`),saved);discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} }
+  try { const saved={...payload, updatedAt:serverTimestamp()};if(groupResponseBase){const updates={};updates[`${responseBase}/${stage}`]=saved;updates[`${groupResponseBase}/${stage}`]=saved;await update(ref(db),updates);}else await update(ref(db,`${responseBase}/${stage}`),saved);discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} }
   catch(e){ const n=document.querySelector('#saveMsg'); if(n){n.textContent='Not saved yet. Check connection and try again.';} }
   finally { if(btn) btn.disabled=false; }
 }
