@@ -35,7 +35,7 @@ function render(){
   }
   group.appendChild(section);
  }
- if(ownEntry){$("#participantName").value=ownEntry.name||"";const option=document.querySelector('input[name="followup"][value="'+ownEntry.answer+'"]');if(option)option.checked=true;$("#submitVote").textContent="Update my availability";}
+ if(ownEntry){$("#noneAvailable").checked=!Object.keys(ownEntry.slots||{}).length;$("#participantName").value=ownEntry.name||"";const option=document.querySelector('input[name="followup"][value="'+ownEntry.answer+'"]');if(option)option.checked=true;$("#submitVote").textContent="Update my availability";}
  $("#loading").hidden=true;$("#poll").hidden=false;
  renderCounts();
 }
@@ -53,12 +53,14 @@ async function init(){
   if(ownEntry)render();
  }catch(e){err("Could not connect to this meeting: "+(e.code||e.message));}
 }
+$("#noneAvailable").addEventListener("change",()=>{if($("#noneAvailable").checked)document.querySelectorAll('input[name="slot"]').forEach(x=>x.checked=false)});
+$("#slotGroups").addEventListener("change",e=>{if(e.target.matches('input[name="slot"]')&&e.target.checked)$("#noneAvailable").checked=false});
 $("#availabilityForm").addEventListener("submit",async e=>{
  e.preventDefault();if(!config||!uid)return;
  const name=$("#participantName").value.trim(),answer=document.querySelector('input[name="followup"]:checked')?.value;
  const slots=Object.fromEntries([...document.querySelectorAll('input[name="slot"]:checked')].map(n=>[n.value,true]));
  if(!name){$("#saveStatus").textContent="Please enter your name.";return}
- if(Object.keys(slots).length===0){$("#saveStatus").textContent="Select at least one suitable time.";return}
+ if(Object.keys(slots).length===0&&!$("#noneAvailable").checked){$("#saveStatus").textContent="Select a time or check None of these times.";return}
  if(!["yes","maybe","no"].includes(answer)){ $("#saveStatus").textContent="Please answer the scenario question.";return}
  const button=$("#submitVote");button.disabled=true;$("#saveStatus").textContent="Saving...";
  try{
