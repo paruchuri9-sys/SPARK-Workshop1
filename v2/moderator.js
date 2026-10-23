@@ -93,8 +93,10 @@ async function openSession(code){
     const tokenSnap=await get(ref(db,"sessions/"+code+"/groupTokens"));groupTokens=tokenSnap.val()||{};
  }
  setupGroupLinks();setupModeratorLinks();
+ $("#overviewNotice").hidden=!(separateMode&&!moderatorGroup);
+ if(separateMode&&!moderatorGroup){document.querySelector(".live-control-layout").hidden=true;document.querySelector(".classroom-control-card details").hidden=true;}
  renderJoinQr();
- $("#authStatus").textContent="Class "+code;
+ $("#authStatus").textContent="Class "+code+(moderatorGroup?" · Group "+moderatorGroup:"");
  if(!isOwner){
    $("#syncStatus").textContent="Teacher controls unavailable in this browser. Return to the browser that created this session, or contact the SPARK team.";
    document.querySelectorAll("#startTimer,#pauseTimer,#addMinute,#resetTimer,#lockResponses,#openStep,#openAndTime,#advanceLive,#advanceTimed,#publishSummary,#refreshSummary").forEach(x=>x.disabled=true);
@@ -134,7 +136,7 @@ function renderGroupProgress(){
  Object.values(responseRows).forEach(r=>{const g=moderatorGroup||Number(r?.participant?.group||1);if(groups[g-1]&&steps.some(t=>r[t.id]&&r[t.id].updatedAt!=null))groups[g-1].saved++;});
  $("#presence").textContent=groups.reduce((a,g)=>a+g.online,0);
  $("#responseCount").textContent=groups.reduce((a,g)=>a+g.saved,0);
- $("#groupProgress").innerHTML=groupCount===1?"":groups.map(g=>'<span class="group-stat"><strong>Group '+g.group+'</strong> '+g.online+' online · '+g.saved+' saved</span>').join("");
+ $("#groupProgress").innerHTML=groupCount===1?"":groups.filter(g=>!moderatorGroup||g.group===moderatorGroup).map(g=>'<span class="group-stat"><strong>Group '+g.group+'</strong> '+g.online+' online · '+g.saved+' saved</span>').join("");
 }
 function makeQr(target,size){
  target.textContent="";
@@ -165,7 +167,7 @@ function bind(){
    renderLive();renderView();
    if(isOwner)$("#syncStatus").textContent="Connected to class "+sessionId;
  },e=>fail("class state",e)));
- if(isOwner){
+ if(isOwner||isSessionOwner){
   unsubs.push(onValue(ref(db,separateMode&&moderatorGroup?"sessions/"+sessionId+"/groupPresence/"+moderatorGroup:"sessions/"+sessionId+"/presence"),s=>{presenceRows=s.val()||{};renderGroupProgress();},e=>fail("students online",e)));
   unsubs.push(onValue(ref(db,responsePath()),s=>{responseRows=s.val()||{};renderGroupProgress();},e=>fail("saved records",e)));
  }
