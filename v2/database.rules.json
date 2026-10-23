@@ -19,8 +19,9 @@
         "presence": {
           ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
           "$uid": {
-            ".write": "auth != null && auth.uid === $uid"
-          }
+            ".write": "auth != null && auth.uid === $uid && !root.child('sessions').child($sessionId).child('state').child('archived').val()"
+          },
+          ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid && !newData.exists()"
         }
       }
     },
@@ -29,15 +30,16 @@
         ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
         "$uid": {
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid"
-        }
+          ".write": "auth != null && auth.uid === $uid && !root.child('sessions').child($sessionId).child('state').child('archived').val()"
+        },
+        ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid && !newData.exists()"
       }
     },
     "exitTickets": {
       "$sessionId": {
         ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
         "$ticketId": {
-          ".write": "auth != null && root.child('sessions').child($sessionId).child('state').exists() && !data.exists()",
+          ".write": "auth != null && !root.child('sessions').child($sessionId).child('state').child('archived').val() && root.child('sessions').child($sessionId).child('state').exists() && !data.exists()",
           ".validate": "newData.hasChildren(['q1','q2','q3','q4','q5'])",
           "q1": {
             ".validate": "newData.isString() && newData.val().length <= 1200"
@@ -57,7 +59,8 @@
           "$other": {
             ".validate": false
           }
-        }
+        },
+        ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid && !newData.exists()"
       }
     }
   }

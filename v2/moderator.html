@@ -5,7 +5,7 @@
 <label for="groupCount">How will students work?</label><select id="groupCount"><option value="1">Whole class (one group)</option><option value="2">2 groups</option><option value="3">3 groups</option><option value="4">4 groups</option><option value="5">5 groups</option><option value="6">6 groups</option><option value="8">8 groups</option></select>
 <div class="actions"><button id="createSession" type="button" class="primary">Create classroom session</button></div><p id="setupError" role="alert" class="error"></p></section>
 <section id="classroom" hidden>
-<div class="card session-compact"><div class="session-header"><div><p class="eyebrow">CLASSROOM SESSION</p><h1 id="sessionLabel">Classroom ready</h1><p class="muted">Students join using this code, link, or QR.</p></div><a id="newSessionLink" href="moderator.html">Start another class</a></div>
+<div class="card session-compact"><div class="session-header"><div><p class="eyebrow">CLASSROOM SESSION</p><h1 id="sessionLabel">Classroom ready</h1><p class="muted">Students join using this code, link, or QR.</p></div><div class="actions"><a class="export-jump" href="#dataPanel">↓ Data counts, downloads &amp; cleanup</a><a id="newSessionLink" href="moderator.html">Start another class</a></div></div>
 <div class="session-tools">
  <div class="session-code-area"><label>Class code</label><p id="sessionId" class="session-code" aria-label="Student classroom code"></p><p id="groupDescription" class="muted"></p></div>
  <div class="join-link-area"><label for="joinLink">Student join link</label><div id="groupLinks" class="group-links" aria-label="Group join links"></div><input id="joinLink" readonly><div class="actions"><button id="copyJoin" class="secondary" type="button">Copy link</button><button id="openStudent" class="secondary" type="button">Test student join</button></div><p id="copyStatus" class="saved" role="status"></p><p class="join-activity"><strong id="presence">...</strong> connected now · <strong id="responseCount">...</strong> with saved records</p><div id="groupProgress" class="group-progress" aria-live="polite"></div></div>
@@ -27,9 +27,20 @@
 <div class="card student-status-card"><h2>Responses and discussion</h2><p class="muted">Summaries are for the step you are viewing. Share them only when students have recorded their own ideas.</p>
 <div class="actions"><button id="refreshSummary" class="secondary" type="button">View answer summary for this step</button></div><div id="summary"></div>
 <details><summary>Optional: Share summary with students</summary><p class="muted">Only share after students have recorded their independent answers.</p><button id="publishSummary" class="secondary" type="button" disabled>Show summary to class</button></details></div>
-<div class="card export-panel"><h2>Download classroom data</h2><p class="muted">Only the teacher who created this session can download these files. Store them in the SPARK-approved secure location. Student scenario data and exit-ticket feedback are separate downloads and are not automatically matched.</p>
+<div class="card export-panel" id="dataPanel"><h2>End-of-class data: verify, download, and clear</h2>
+<p class="muted">After students finish, check these counts and download BOTH CSV files. Then inspect the files, remove identifying details and send them only by the approved secure method. Deletion is irreversible and requires confirmation.</p>
+<div class="actions"><button id="inspectData" type="button" class="secondary">Check saved data now</button><span id="dataCounts" role="status">Counts not checked yet</span></div>
+<h3>Step 1: Download both files</h3><p class="muted">Only the teacher who created this session can download these files. Store them in the SPARK-approved secure location. Student scenario data and exit-ticket feedback are separate downloads and are not automatically matched.</p>
 <div class="actions"><button id="exportResponses" class="secondary" type="button">Download scenario responses (CSV)</button><button id="exportExitTickets" class="secondary" type="button">Download exit tickets (CSV)</button></div>
-<p id="exportStatus" class="muted" role="status"></p></div>
+<p id="exportStatus" class="muted" role="status"></p>
+<details class="purge-controls"><summary>Step 2: Permanently clear student data from this session</summary>
+<p class="error"><strong>Irreversible:</strong> Deleting will remove the server's scenario responses, exit-ticket responses, presence records and published student summaries. The session will remain as an archived empty record. It cannot be used to collect more student responses.</p>
+<label class="choice"><input type="checkbox" id="confirmReviewed"> I have opened both downloaded CSV files, verified the expected records, and securely retained the approved copies.</label>
+<label class="choice"><input type="checkbox" id="confirmCompleted"> The activity is finished, all students have had a chance to submit, and the approved data-handling/IRB procedure permits this deletion.</label>
+<label for="confirmCode">Type class code to confirm</label><input id="confirmCode" placeholder="Class code" autocomplete="off">
+<div class="actions"><button id="purgeStudentData" type="button" class="secondary" disabled>Delete server student data</button></div>
+<p id="purgeStatus" role="status"></p>
+</details></div>
 </section>
 <dialog id="qrDialog" aria-label="Enlarged student join QR code"><h2>Scan to join SPARK</h2><div id="qrLarge"></div><p id="qrSessionLabel"></p><form method="dialog"><button class="primary" type="submit">Close</button></form></dialog>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script><script type="module" src="moderator.js"></script></main></body></html>
