@@ -8,7 +8,7 @@
 <div class="card session-compact"><div class="session-header"><div><p class="eyebrow">CLASSROOM SESSION</p><h1 id="sessionLabel">Classroom ready</h1><p class="muted">Students join using this code, link, or QR.</p></div><a id="newSessionLink" href="moderator.html">Start another class</a></div>
 <div class="session-tools">
  <div class="session-code-area"><label>Class code</label><p id="sessionId" class="session-code" aria-label="Student classroom code"></p><p id="groupDescription" class="muted"></p></div>
- <div class="join-link-area"><label for="joinLink">Student join link</label><input id="joinLink" readonly><div class="actions"><button id="copyJoin" class="secondary" type="button">Copy link</button><button id="openStudent" class="secondary" type="button">Test student join</button></div><p id="copyStatus" class="saved" role="status"></p></div>
+ <div class="join-link-area"><label for="joinLink">Student join link</label><input id="joinLink" readonly><div class="actions"><button id="copyJoin" class="secondary" type="button">Copy link</button><button id="openStudent" class="secondary" type="button">Test student join</button></div><p id="copyStatus" class="saved" role="status"></p><p class="join-activity"><strong id="presence">...</strong> connected now · <strong id="responseCount">...</strong> with saved records</p></div>
  <div class="qr-area"><div id="qrCode" aria-label="QR code for the student join link"></div><button id="enlargeQr" class="secondary" type="button">Enlarge QR</button></div>
 </div></div>
 <div class="card classroom-control-card">
@@ -23,8 +23,8 @@
 <div class="card step-guide-card"><nav id="stepNav" class="step-nav" aria-label="Classroom activity steps"></nav>
 <div class="header-row classroom-head"><div><p class="eyebrow" id="viewState">VIEWING</p><h2 id="viewTitle"></h2></div><div class="actions"><button id="prevView" class="secondary" type="button">← Previous</button><button id="nextView" class="secondary" type="button">Next →</button></div></div>
 <section class="prompt-panel"><h3>Suggested prompts for the group</h3><ul id="readAloud" class="read-aloud"></ul><p id="modNote" class="teacher-tip"></p></section><p class="muted" id="viewMeta"></p>
-<div class="actions"><button id="openStep" class="secondary" type="button">Open selected step for students</button><button id="openAndTime" class="secondary" type="button">Open selected next step + timer</button></div></div>
-<div class="card student-status-card"><h2>Student activity</h2><p><strong id="presence">...</strong> connected now · <strong id="responseCount">...</strong> with saved records</p>
+<p class="muted step-nav-help">Browse these steps to prepare prompts. To advance the class, use <strong>Open next step</strong> above.</p><div class="actions"><button id="openStep" class="secondary" type="button">Open selected future step (skip ahead)</button><button id="openAndTime" class="secondary" type="button" hidden>Open selected next step + timer</button></div></div>
+<div class="card student-status-card"><h2>Responses and discussion</h2><p class="muted">Summaries are for the step you are viewing. Share them only when students have recorded their own ideas.</p>
 <div class="actions"><button id="refreshSummary" class="secondary" type="button">View answer summary for this step</button></div><div id="summary"></div>
 <details><summary>Optional: Share summary with students</summary><p class="muted">Only share after students have recorded their independent answers.</p><button id="publishSummary" class="secondary" type="button" disabled>Show summary to class</button></details></div>
 </section>
