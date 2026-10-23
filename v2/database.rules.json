@@ -19,7 +19,7 @@
         "presence": {
           ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
           "$uid": {
-            ".write": "auth != null && auth.uid === $uid && !root.child('sessions').child($sessionId).child('state').child('archived').val()"
+            ".write": "auth != null && auth.uid === $uid && (root.child('sessions').child($sessionId).child('state').child('archived').exists() === false || root.child('sessions').child($sessionId).child('state').child('archived').val() === false)"
           },
           ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid && !newData.exists()"
         }
@@ -30,7 +30,7 @@
         ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
         "$uid": {
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid && !root.child('sessions').child($sessionId).child('state').child('archived').val()"
+          ".write": "auth != null && auth.uid === $uid && (root.child('sessions').child($sessionId).child('state').child('archived').exists() === false || root.child('sessions').child($sessionId).child('state').child('archived').val() === false)"
         },
         ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid && !newData.exists()"
       }
@@ -39,7 +39,7 @@
       "$sessionId": {
         ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
         "$ticketId": {
-          ".write": "auth != null && !root.child('sessions').child($sessionId).child('state').child('archived').val() && root.child('sessions').child($sessionId).child('state').exists() && !data.exists()",
+          ".write": "auth != null && (root.child('sessions').child($sessionId).child('state').child('archived').exists() === false || root.child('sessions').child($sessionId).child('state').child('archived').val() === false) && root.child('sessions').child($sessionId).child('state').exists() && !data.exists()",
           ".validate": "newData.hasChildren(['q1','q2','q3','q4','q5'])",
           "q1": {
             ".validate": "newData.isString() && newData.val().length <= 1200"
@@ -61,6 +61,69 @@
           }
         },
         ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid && !newData.exists()"
+      }
+    },
+    "meetingPolls": {
+      "$pollId": {
+        "owner": {
+          ".read": "auth != null",
+          ".write": "auth != null && !data.exists() && newData.val() === auth.uid",
+          ".validate": "newData.isString()"
+        },
+        "config": {
+          ".read": "auth != null",
+          ".write": "auth != null && root.child('meetingPolls').child($pollId).child('owner').val() === auth.uid",
+          ".validate": "newData.hasChildren(['title','question','dates','slots','slotOrder','timezone','closed'])",
+          "title": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120"
+          },
+          "question": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 500"
+          },
+          "closed": {
+            ".validate": "newData.isBoolean()"
+          }
+        },
+        "entries": {
+          ".read": "auth != null && root.child('meetingPolls').child($pollId).child('owner').val() === auth.uid",
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid && root.child('meetingPolls').child($pollId).child('config').child('closed').val() === false",
+            ".validate": "newData.hasChildren(['name','answer','slots','submittedAt'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+            },
+            "answer": {
+              ".validate": "newData.val() === 'yes' || newData.val() === 'maybe' || newData.val() === 'no'"
+            },
+            "submittedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "slots": {
+              "$slotId": {
+                ".validate": "newData.val() === true && root.child('meetingPolls').child($pollId).child('config').child('slots').child($slotId).exists()"
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "votes": {
+          ".read": "auth != null",
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && root.child('meetingPolls').child($pollId).child('config').child('closed').val() === false",
+            ".validate": "newData.hasChildren(['slots'])",
+            "slots": {
+              "$slotId": {
+                ".validate": "newData.val() === true && root.child('meetingPolls').child($pollId).child('config').child('slots').child($slotId).exists()"
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
       }
     }
   }
