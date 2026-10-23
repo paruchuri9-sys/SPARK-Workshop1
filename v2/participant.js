@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, onValue, set, update, remove, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getDatabase, ref, push, onValue, set, update, remove, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 
@@ -17,6 +17,8 @@ let activeTab = 0; let timerInterval; let myResponses = {};
 if (previewMode) { activeTab = 0; myResponses = {}; sessionStorage.removeItem("sparkPreviewTab"); }
 let stateRef = null, responseBase = null;
 let serverOffset=0, publishedUnsub=null;
+let exitStatus="not_started";
+const exitKey="spark_exit_completed_"+sessionId;
 const draftKey = id => "spark_draft_"+sessionId+"_"+uid+"_"+id;
 const getDraft = id => {try{return JSON.parse(sessionStorage.getItem(draftKey(id))||"null");}catch{return null;}};
 function discardDraft(id){try{sessionStorage.removeItem(draftKey(id));}catch{}}
@@ -57,7 +59,7 @@ if (previewMode) {
   $("#status").textContent = "PREVIEW MODE";
   renderTabs(); render(); startTimer();
 } else if(db && stateRef) {
-  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
+  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); else if(SCENARIO.tabs[activeTab]?.id==="final" && myResponses.final?.updatedAt && !document.querySelector("#exitTicketForm") && exitStatus!=="submitted" && exitStatus!=="skipped"){storeDraft();render();} }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
   onValue(ref(db,".info/serverTimeOffset"), snap => {serverOffset=snap.val()||0;});
   onValue(stateRef, snap => {
     if(!snap.exists()) { $("#status").textContent="Session not found";return; }
@@ -130,7 +132,7 @@ async function save(stage, payload){
     if(btn) btn.disabled=false;
     return;
   }
-  try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()}); discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} }
+  try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()});myResponses[stage]={...payload,updatedAt:Date.now()}; discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} if(stage==='final')render(); }
   catch(e){ const n=document.querySelector('#saveMsg'); if(n){n.textContent='Not saved yet. Check connection and try again.';} }
   finally { if(btn) btn.disabled=false; }
 }
@@ -170,6 +172,7 @@ function render(){
  if(t.responseType==='recommendation') html += `<form class="card" id="form"><h2>What do you recommend now?</h2>${recOptions('rec')}<label>Which evidence matters most to your choice?</label><textarea id="evidence"></textarea><label>Why does that evidence matter? What are you still unsure about?</label><textarea id="reasoning"></textarea><label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><div class="actions"><button class="primary" data-save>Save preliminary recommendation</button><span id="saveMsg"></span></div></form><div class="card"><h2>Room snapshot</h2><div id="publishedSummary" class="muted">The moderator has not published a snapshot yet.</div></div>`;
  if(t.responseType==='update') html += `<form class="card" id="form"><h2>Does the new information matter to your decision?</h2>${recOptions('rec')}<label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><label>Why are you keeping or changing your recommendation?</label><textarea id="why"></textarea><div class="actions"><button class="primary" data-save>Save update</button><span id="saveMsg"></span></div></form>`;
  if(t.responseType==='final') html += `<form class="card" id="form"><h2>Your decision after considering the evidence</h2>${recOptions('rec')}<label>Why is this your choice now?</label><textarea id="finalReason"></textarea><label>What could happen or what could you learn that would make you reconsider?</label><textarea id="reopen"></textarea><label>What new information would NOT be enough to change your mind by itself?</label><textarea id="insufficient"></textarea><div class="actions"><button class="primary" data-save>Save final response</button><span id="saveMsg"></span></div></form>`;
+ if(t.id==="final")html+=exitTicketHtml();
  $("#app").innerHTML=html;
  hydrate(t);
  applyDraft(t);
@@ -177,6 +180,7 @@ function render(){
  const sb=document.querySelector("[data-save]");if(sb)sb.disabled=!!state.locked;
  const conf=$("#conf"); if(conf) conf.addEventListener('input',()=>$("#confVal").textContent=conf.value);
  const form=$("#form"); if(form) form.addEventListener('submit',async e=>{e.preventDefault(); if(state.locked){$("#saveMsg").textContent='Responses are currently locked.';return;} const payload=collect(t.responseType); if(payload.error){$("#saveMsg").textContent=payload.error;return;} await save(t.id,payload);});
+ wireExitTicket();
  if(previewMode && t.responseType==='evidence-review'){
    document.querySelectorAll('.packet-reveal').forEach(btn=>btn.addEventListener('click',()=>{
      const panel=document.querySelector('#packet-'+btn.dataset.packet);
@@ -194,6 +198,45 @@ function render(){
  }
 }
 
+
+function exitTicketHtml(){
+ if(previewMode)return '<section class="card"><h2>Help us improve SPARK</h2><p class="muted">In a live class, this separate optional feedback form appears after you save your final decision. Preview responses are not recorded.</p></section>';
+ if(exitStatus==="submitted"||sessionStorage.getItem(exitKey)==="yes")return '<section class="card"><h2>Thank you for your feedback!</h2><p>You have completed the optional exit ticket.</p></section>';
+ if(exitStatus==="skipped")return '<section class="card"><h2>Scenario complete</h2><p>You skipped the optional feedback questions. Your scenario answers are unchanged.</p></section>';
+ const prompts=[
+ "Which part made you think hardest about your decision? What made it hard?",
+ "What was confusing, difficult to read, or hard to use?",
+ "If you could change one thing about this activity, what would it be?",
+ "What important information or viewpoint was missing?",
+ "Would you want to do another scenario like this? Why or why not?"
+ ];
+ const unlocked=!!myResponses.final?.updatedAt;
+ return '<section class="card exit-ticket" id="exitSection"><h2>Help us improve SPARK</h2><p class="muted">Optional feedback. We do not ask for your name, and this form is saved separately from your scenario answers. Please do not include names or identifying details. You can skip it.</p>'+
+ (unlocked?'<form id="exitTicketForm">'+prompts.map((q,i)=>'<label for="exitQ'+(i+1)+'">'+(i+1)+'. '+esc(q)+'</label><textarea id="exitQ'+(i+1)+'" maxlength="1200" rows="3"></textarea>').join('')+
+ '<div class="actions"><button class="primary" type="submit" id="exitSubmit">Send feedback</button><button class="secondary" type="button" id="exitSkip">Skip feedback</button><span id="exitMessage" role="status"></span></div></form>':
+ '<p class="muted">First save your final decision above. Then these optional feedback questions will appear.</p>')+'</section>';
+}
+function wireExitTicket(){
+ const form=document.querySelector("#exitTicketForm");
+ if(!form)return;
+ document.querySelector("#exitSkip").addEventListener("click",()=>{exitStatus="skipped";render();});
+ form.addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(!myResponses.final?.updatedAt){document.querySelector("#exitMessage").textContent="Save your final decision first.";return;}
+  const btn=document.querySelector("#exitSubmit");btn.disabled=true;
+  const answers=Object.fromEntries([1,2,3,4,5].map(i=>["q"+i,document.querySelector("#exitQ"+i).value.trim()]));
+  try{
+   // No UID, nickname, group, saved stage or client timestamp is included.
+   // A Firebase connection still sends auth information to the service; this is pseudonymous collection.
+   await set(push(ref(db,"exitTickets/"+sessionId)),answers);
+   exitStatus="submitted";sessionStorage.setItem(exitKey,"yes");
+   render();
+  }catch(error){
+   document.querySelector("#exitMessage").textContent="Feedback not saved. Try again, or skip it.";
+   btn.disabled=false;
+  }
+ });
+}
 function hydrate(t){
  const r=myResponses[t.id]; if(!r) return;
  if(r.recommendation){ const radio=[...document.querySelectorAll('input[name="rec"]')].find(x=>x.value===r.recommendation); if(radio) radio.checked=true; }
