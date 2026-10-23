@@ -17,6 +17,17 @@ function draw(){
  const base=new URL("schedule.html",location.href);base.searchParams.set("poll",pollId);
  $("#publicLink").value=base.href;
  $("#responseCount").textContent=rows().length+" named response(s). Only this organizer browser can read names.";
+ const best=$("#bestSlots");best.replaceChildren();
+ const ranked=cfg.slotOrder.map(k=>({key:k,slot:cfg.slots[k],count:Object.values(votes).filter(v=>v?.slots?.[k]).length}))
+  .sort((a,b)=>b.count-a.count || Number(b.slot.date===cfg.preferredDate)-Number(a.slot.date===cfg.preferredDate) || cfg.slotOrder.indexOf(a.key)-cfg.slotOrder.indexOf(b.key));
+ const explanation=document.createElement("p");explanation.textContent=ranked[0]?.count
+  ?"Most available: "+slotLabel(ranked[0].slot)+" ("+ranked[0].count+" teacher(s)). Ties favor the preferred date."
+  :"No availability selections recorded yet.";best.appendChild(explanation);
+ if(ranked[0]?.count){
+  const list=document.createElement("ol");
+  ranked.slice(0,3).forEach(x=>{const li=document.createElement("li");li.textContent=slotLabel(x.slot)+" — "+x.count+" available"+(x.slot.date===cfg.preferredDate?" · preferred day":"");list.appendChild(li)});
+  best.appendChild(list);
+ }
  const totals=$("#totals");totals.replaceChildren();
  for(const dayDate of cfg.dates){
   const h=document.createElement("h3");h.textContent=day(dayDate)+(cfg.preferredDate===dayDate?" · preferred":"");totals.appendChild(h);
