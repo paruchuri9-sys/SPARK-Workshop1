@@ -21,6 +21,37 @@
           "$uid": {
             ".write": "auth != null && auth.uid === $uid"
           }
+        },
+        "groupTokens": {
+          ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
+          ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid"
+        },
+        "groupModerators": {
+          "$groupId": {
+            ".read": "auth != null && (root.child('sessions').child($sessionId).child('owner').val() === auth.uid || data.child('uid').val() === auth.uid)",
+            ".write": "auth != null && (root.child('sessions').child($sessionId).child('owner').val() === auth.uid || (!data.exists() && newData.child('uid').val() === auth.uid && newData.child('token').val() === root.child('sessions').child($sessionId).child('groupTokens').child($groupId).val()))"
+          }
+        },
+        "groupStates": {
+          ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
+          "$groupId": {
+            ".read": "auth != null",
+            ".write": "auth != null && (root.child('sessions').child($sessionId).child('owner').val() === auth.uid || root.child('sessions').child($sessionId).child('groupModerators').child($groupId).child('uid').val() === auth.uid)"
+          }
+        },
+        "groupPublished": {
+          "$groupId": {
+            ".read": "auth != null",
+            ".write": "auth != null && (root.child('sessions').child($sessionId).child('owner').val() === auth.uid || root.child('sessions').child($sessionId).child('groupModerators').child($groupId).child('uid').val() === auth.uid)"
+          }
+        },
+        "groupPresence": {
+          "$groupId": {
+            ".read": "auth != null && (root.child('sessions').child($sessionId).child('owner').val() === auth.uid || root.child('sessions').child($sessionId).child('groupModerators').child($groupId).child('uid').val() === auth.uid)",
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid"
+            }
+          }
         }
       }
     },
@@ -30,6 +61,18 @@
         "$uid": {
           ".read": "auth != null && auth.uid === $uid",
           ".write": "auth != null && auth.uid === $uid"
+        }
+      }
+    },
+    "groupResponses": {
+      "$sessionId": {
+        ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
+        "$groupId": {
+          ".read": "auth != null && (root.child('sessions').child($sessionId).child('owner').val() === auth.uid || root.child('sessions').child($sessionId).child('groupModerators').child($groupId).child('uid').val() === auth.uid)",
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid"
+          }
         }
       }
     }
