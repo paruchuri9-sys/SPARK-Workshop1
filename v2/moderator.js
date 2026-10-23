@@ -8,6 +8,7 @@ const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getDatabase
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const steps = SCENARIO.tabs;
+const downloadState={responses:null,exits:null};
 let sessionId = "", isOwner = false, serverOffset = 0, state = {currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false};
 let viewTab = null, summary = null, summaryRequest = 0, timerInterval, unsubs = [];
 let groupCount=1, activeGroup=1, presenceRows={}, responseRows={};
@@ -60,7 +61,7 @@ async function openSession(code){
  $("#authStatus").textContent="Class "+code;
  if(!isOwner){
    $("#syncStatus").textContent="Teacher controls unavailable in this browser. Return to the browser that created this session, or contact the SPARK team.";
-   document.querySelectorAll("#startTimer,#pauseTimer,#addMinute,#resetTimer,#lockResponses,#openStep,#openAndTime,#advanceLive,#advanceTimed,#publishSummary,#refreshSummary").forEach(x=>x.disabled=true);
+   document.querySelectorAll("#startTimer,#pauseTimer,#addMinute,#resetTimer,#lockResponses,#openStep,#openAndTime,#advanceLive,#advanceTimed,#publishSummary,#refreshSummary,#exportResponses,#exportExitTickets,#inspectData").forEach(x=>x.disabled=true);
  }
  bind();
 }
@@ -243,6 +244,7 @@ $("#exportResponses").addEventListener("click",async()=>{
     ...stages.flatMap(stage=>[...fields[stage].map(f=>r?.[stage]?.[f]??""),r?.[stage]?.updatedAt??""])
   ]);
   downloadCsv("spark-"+sessionId+"-scenario-responses.csv",columns,rows);
+  downloadState.responses=JSON.stringify(data);refreshPurgeEnabled();
   $("#exportStatus").textContent=rows.length+" participant records exported. Keep this file in approved secure storage.";
  }catch(e){$("#exportStatus").textContent="Export failed: "+(e?.code||e?.message||"unknown error");}
  finally{button.disabled=false;}
@@ -254,7 +256,80 @@ $("#exportExitTickets").addEventListener("click",async()=>{
   const data=(await get(ref(db,"exitTickets/"+sessionId))).val()||{};
   const rows=Object.values(data).map(v=>[v.q1||"",v.q2||"",v.q3||"",v.q4||"",v.q5||""]);
   downloadCsv("spark-"+sessionId+"-exit-tickets.csv",["thinking_hardest","confusion","one_change","missing_information","another_scenario"],rows);
+  downloadState.exits=JSON.stringify(data);refreshPurgeEnabled();
   $("#exportStatus").textContent=rows.length+" unlinked feedback entries exported. No participant IDs included.";
  }catch(e){$("#exportStatus").textContent="Exit-ticket export failed: "+(e?.code||e?.message||"unknown error");}
  finally{button.disabled=false;}
+});
+
+
+async function getSavedCounts(){
+ await verifyOwner();
+ const [responses,tickets]=await Promise.all([
+  get(ref(db,"responses/"+sessionId)),get(ref(db,"exitTickets/"+sessionId))
+ ]);
+ const students=Object.values(responses.val()||{});
+ const counts=Object.fromEntries(steps.map(t=>[t.id,students.filter(r=>r?.[t.id]?.updatedAt).length]));
+ return {participants:students.length,stages:counts,tickets:Object.keys(tickets.val()||{}).length};
+}
+$("#inspectData").addEventListener("click",async()=>{
+ const button=$("#inspectData");button.disabled=true;$("#dataCounts").textContent="Reading Firebase...";
+ try{
+  const c=await getSavedCounts();
+  $("#dataCounts").textContent=c.participants+" participant records; "+
+    c.stages.final+" final decisions saved; "+c.tickets+" exit tickets. "+
+    "Stage saves: "+steps.map(t=>t.label.split(". ")[0]+": "+c.stages[t.id]).join(", ");
+ }catch(e){$("#dataCounts").textContent="Could not verify records: "+(e.code||e.message);}
+ finally{button.disabled=false;}
+});
+function refreshPurgeEnabled(){
+ const ready=!!(isOwner && downloadState.responses!==null && downloadState.exits!==null &&
+  $("#confirmReviewed").checked && $("#confirmCompleted").checked &&
+  $("#confirmCode").value.trim().toUpperCase()===sessionId && !state.archived);
+ $("#purgeStudentData").disabled=!ready;
+}
+["#confirmReviewed","#confirmCompleted","#confirmCode"].forEach(selector=>{
+ $(selector).addEventListener("input",refreshPurgeEnabled);
+ $(selector).addEventListener("change",refreshPurgeEnabled);
+});
+$("#purgeStudentData").addEventListener("click",async()=>{
+ const button=$("#purgeStudentData");refreshPurgeEnabled();if(button.disabled)return;
+ if(!confirm("Permanently delete ALL student responses, exit tickets and presence data from class "+sessionId+"? This cannot be undone. Confirm your files are safely stored."))return;
+ button.disabled=true;
+ $("#purgeStatus").textContent="Comparing current Firebase records with downloaded exports...";
+ try{
+  await verifyOwner();
+  const [rr,tt,st]=await Promise.all([
+   get(ref(db,"responses/"+sessionId)),
+   get(ref(db,"exitTickets/"+sessionId)),
+   get(ref(db,"sessions/"+sessionId+"/state"))
+  ]);
+  if(st.val()?.archived)throw Error("Session already archived. Contact SPARK before repeating cleanup.");
+  if(JSON.stringify(rr.val()||{})!==downloadState.responses ||
+     JSON.stringify(tt.val()||{})!==downloadState.exits){
+   downloadState.responses=null;downloadState.exits=null;
+   throw Error("Data changed since export. Download and review BOTH files again before deleting.");
+  }
+  $("#purgeStatus").textContent="Archiving session to stop new submissions...";
+  await update(ref(db,"sessions/"+sessionId+"/state"),{archived:true,locked:true,timerEnd:null,timerPausedRemaining:null});
+  $("#purgeStatus").textContent="Removing student records...";
+  await update(ref(db),{
+   ["responses/"+sessionId]:null,
+   ["exitTickets/"+sessionId]:null,
+   ["sessions/"+sessionId+"/presence"]:null,
+   ["sessions/"+sessionId+"/published"]:null
+  });
+  const [a,b,c]=await Promise.all([
+   get(ref(db,"responses/"+sessionId)),
+   get(ref(db,"exitTickets/"+sessionId)),
+   get(ref(db,"sessions/"+sessionId+"/presence"))
+  ]);
+  if(a.exists()||b.exists()||c.exists())throw Error("Deletion verification failed. Do not assume records were cleared.");
+  $("#purgeStatus").textContent="Verified: student responses, exit tickets and presence records removed. This class is archived; keep your approved CSV files in secure storage.";
+  $("#exportResponses").disabled=true;$("#exportExitTickets").disabled=true;
+  $("#purgeStudentData").disabled=true;
+ }catch(e){
+  $("#purgeStatus").textContent="Cleanup incomplete: "+(e.code||e.message)+
+   ". If session was archived, contact SPARK for supervised cleanup; do not create a new live session to replace lost data.";
+ }
 });
