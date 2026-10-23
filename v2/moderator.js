@@ -9,6 +9,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const steps = SCENARIO.tabs;
 const downloadState={responses:null,exits:null};
+const isSubmitted = r => !!r && (r.status==="submitted" || (!r.status && !!r.updatedAt));
 let sessionId = "", isOwner = false, serverOffset = 0, state = {currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false};
 let viewTab = null, summary = null, summaryRequest = 0, timerInterval, unsubs = [];
 let groupCount=1, activeGroup=1, presenceRows={}, responseRows={};
@@ -187,11 +188,11 @@ async function computeSummary(){
  if(token!==summaryRequest||steps[viewTab].id!==step||sessionId!==code)return null;
  const rows=Object.values(snap.val()||{}),items={};
  if(["first-impression","preliminary","new-information","final"].includes(step))
-   rows.forEach(r=>{const x=r[step]?.recommendation;if(x)items[x]=(items[x]||0)+1;});
+   rows.forEach(r=>{const x=isSubmitted(r[step])?r[step]?.recommendation:null;if(x)items[x]=(items[x]||0)+1;});
  else if(step==="investigate")
-   rows.forEach(r=>(r[step]?.areas||[]).forEach(x=>{items[x]=(items[x]||0)+1;}));
- const text=step==="need-to-know"?rows.filter(r=>r[step]?.questions?.length).length+" students submitted questions.":
-   step!=="investigate"&&!["first-impression","preliminary","new-information","final"].includes(step)?rows.filter(r=>r[step]).length+" students submitted notes.":null;
+   rows.forEach(r=>(isSubmitted(r[step])?r[step]?.areas||[]:[]).forEach(x=>{items[x]=(items[x]||0)+1;}));
+ const text=step==="need-to-know"?rows.filter(r=>isSubmitted(r[step])&&r[step]?.questions?.length).length+" students submitted questions.":
+   step!=="investigate"&&!["first-impression","preliminary","new-information","final"].includes(step)?rows.filter(r=>isSubmitted(r[step])).length+" students submitted notes.":null;
  summary={step,session:code,payload:text?{text}:{items}};
  $("#summary").innerHTML=text?esc(text):Object.entries(items).sort((a,b)=>b[1]-a[1]).map(([k,v])=>"<div>"+esc(k)+": <strong>"+v+"</strong></div>").join("")||"No responses yet.";
  $("#publishSummary").disabled=false;return summary;
@@ -241,7 +242,7 @@ $("#exportResponses").addEventListener("click",async()=>{
   const fieldNames=stages.flatMap(stage=>[...fields[stage].map(f=>stage+"."+f),stage+".saved"]);
   const columns=["anonymous_row",...fieldNames];
   const rows=Object.entries(data).sort(([a],[b])=>a.localeCompare(b)).map(([key,r],i)=>["R"+String(i+1).padStart(3,"0"),
-    ...stages.flatMap(stage=>[...fields[stage].map(f=>r?.[stage]?.[f]??""),r?.[stage]?.updatedAt?"yes":""])
+    ...stages.flatMap(stage=>[...fields[stage].map(f=>r?.[stage]?.[f]??""),isSubmitted(r?.[stage])?"yes":r?.[stage]?.status==="draft"?"draft":""])
   ]);
   downloadCsv("spark-"+sessionId+"-scenario-responses.csv",columns,rows);
   downloadState.responses=JSON.stringify(data);refreshPurgeEnabled();
@@ -269,7 +270,7 @@ async function getSavedCounts(){
   get(ref(db,"responses/"+sessionId)),get(ref(db,"exitTickets/"+sessionId))
  ]);
  const students=Object.values(responses.val()||{});
- const counts=Object.fromEntries(steps.map(t=>[t.id,students.filter(r=>r?.[t.id]?.updatedAt).length]));
+ const counts=Object.fromEntries(steps.map(t=>[t.id,students.filter(r=>isSubmitted(r?.[t.id])).length]));
  return {participants:students.length,stages:counts,tickets:Object.keys(tickets.val()||{}).length};
 }
 $("#inspectData").addEventListener("click",async()=>{
