@@ -11,11 +11,19 @@ const steps = SCENARIO.tabs;
 let sessionId = "", isOwner = false, serverOffset = 0, state = {currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false};
 let viewTab = null, summary = null, summaryRequest = 0, timerInterval, unsubs = [];
 let groupCount=1, activeGroup=1, presenceRows={}, responseRows={};
+let separateMode=false, isSessionOwner=false, moderatorGroup=0, groupTokens={};
+const requestParams=new URLSearchParams(location.search);
+const requestedGroup=Number(requestParams.get("group")||0);
+const accessToken=requestParams.get("token")||"";
+const statePath=()=> "sessions/"+sessionId+(separateMode&&moderatorGroup?"/groupStates/"+moderatorGroup:"/state");
+const publishedPath=step=>"sessions/"+sessionId+(separateMode&&moderatorGroup?"/groupPublished/"+moderatorGroup:"/published")+"/"+step;
+const responsePath=()=>separateMode&&moderatorGroup?"groupResponses/"+sessionId+"/"+moderatorGroup:"responses/"+sessionId;
 const now = () => Date.now()+serverOffset;
 const requested = (new URLSearchParams(location.search).get("session")||"").toUpperCase().replace(/[^A-F0-9]/g,"");
 const showError = m => {$("#setupError").textContent=m;$("#authStatus").textContent="Action needed";};
 const connect = async () => {if(!auth.currentUser)await signInAnonymously(auth);};
 
+function refreshModeOption(){const multiple=Number($("#groupCount").value)>1;$("#separateModerators").disabled=!multiple;if(!multiple)$("#separateModerators").checked=false;$("#moderatorModeHelp").textContent=multiple?"Unchecked: one teacher advances every group. Checked: each group gets its own moderator, stage and timer.":"For one group, the classroom has one moderator.";}$("#groupCount").addEventListener("change",refreshModeOption);refreshModeOption();
 $("#createSession").addEventListener("click",async()=>{
  const btn=$("#createSession");btn.disabled=true;$("#setupError").textContent="";
  let operation="signing in", code="", ownerSaved=false, sessionSaved=false;
@@ -33,7 +41,22 @@ $("#createSession").addEventListener("click",async()=>{
    await set(ref(db,"sessions/"+code+"/owner"),auth.currentUser.uid);
    ownerSaved=true;
    operation="creating classroom session state";
-   await set(ref(db,"sessions/"+code+"/state"),{currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false,groupCount:Number($("#groupCount").value),createdAt:Date.now()});
+   const separate=Number($("#groupCount").value)>1 && $("#separateModerators").checked;
+   const totalGroups=Number($("#groupCount").value);
+   if(separate){
+     operation="creating group moderator tokens";
+     const tokens={};const states={};
+     for(let g=1;g<=totalGroups;g++){
+       const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
+       tokens[g]=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
+       states[g]={currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false};
+     }
+     await set(ref(db,"sessions/"+code+"/groupTokens"),tokens);
+     operation="creating group states";
+     await set(ref(db,"sessions/"+code+"/groupStates"),states);
+   }
+   operation="creating classroom session state";
+   await set(ref(db,"sessions/"+code+"/state"),{currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false,groupCount:totalGroups,separateModerators:separate,createdAt:Date.now()});
    sessionSaved=true;
    location.assign("moderator.html?session="+encodeURIComponent(code));
  }catch(e){
@@ -49,23 +72,53 @@ async function openSession(code){
  await connect();
  const [st,owner]=await Promise.all([get(ref(db,"sessions/"+code+"/state")),get(ref(db,"sessions/"+code+"/owner"))]);
  if(!st.exists())throw Error("Session unavailable. Open your original teacher link or create a new session.");
- sessionId=code;isOwner=owner.val()===auth.currentUser.uid;
+ sessionId=code;isSessionOwner=owner.val()===auth.currentUser.uid;
+ groupCount=Math.max(1,Number(st.val().groupCount||1));separateMode=!!st.val().separateModerators;
+ moderatorGroup=separateMode&&Number.isInteger(requestedGroup)&&requestedGroup>=1&&requestedGroup<=groupCount?requestedGroup:0;
+ isOwner=isSessionOwner;
+ if(separateMode&&moderatorGroup&&!isSessionOwner){
+   const path="sessions/"+code+"/groupModerators/"+moderatorGroup;
+   const existing=await get(ref(db,path)).catch(()=>null);
+   if(existing?.exists() && existing.val()?.uid===auth.currentUser.uid)isOwner=true;
+   else if(accessToken){
+     await set(ref(db,path),{uid:auth.currentUser.uid,token:accessToken});
+     isOwner=true;
+   }
+ }
+ if(separateMode&&moderatorGroup===0)isOwner=false;
  $("#setup").hidden=true;$("#classroom").hidden=false;$("#sessionId").textContent=code;
- $("#sessionLabel").textContent=isOwner?"Classroom ready":"View only";
- groupCount=Math.max(1,Number(st.val().groupCount||1));
- $("#groupDescription").textContent=groupCount===1?"One whole-class group, individual responses":groupCount+" groups, individual responses";
+ $("#sessionLabel").textContent=isOwner?(moderatorGroup?"Group "+moderatorGroup+" moderator":"Classroom ready"):(separateMode&&!moderatorGroup?"Group overview":"View only");
+ $("#groupDescription").textContent=groupCount===1?"One whole-class group, individual responses":groupCount+" groups, "+(separateMode?"each independently moderated":"one shared moderator");
  $("#joinLink").value=new URL("join.html?session="+encodeURIComponent(code),location.href).href;
- setupGroupLinks();
+ if(separateMode&&isSessionOwner){
+    const tokenSnap=await get(ref(db,"sessions/"+code+"/groupTokens"));groupTokens=tokenSnap.val()||{};
+ }
+ setupGroupLinks();setupModeratorLinks();
+ $("#overviewNotice").hidden=!(separateMode&&!moderatorGroup);
+ if(separateMode&&!moderatorGroup){document.querySelector(".live-control-layout").hidden=true;document.querySelector(".classroom-control-card details").hidden=true;}
  renderJoinQr();
- $("#authStatus").textContent="Class "+code;
+ $("#authStatus").textContent="Class "+code+(moderatorGroup?" · Group "+moderatorGroup:"");
  if(!isOwner){
-   $("#syncStatus").textContent="Teacher controls unavailable in this browser. Return to the browser that created this session, or contact the SPARK team.";
+   $("#syncStatus").textContent=isSessionOwner&&separateMode&&!moderatorGroup?"Overview only. Each group moderator controls their own step and timer.":"Moderator controls unavailable in this browser. Use the original moderator link, or contact the SPARK team.";
    document.querySelectorAll("#startTimer,#pauseTimer,#addMinute,#resetTimer,#lockResponses,#openStep,#openAndTime,#advanceLive,#advanceTimed,#publishSummary,#refreshSummary").forEach(x=>x.disabled=true);
  }
  bind();
 }
 $("#copyJoin").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#joinLink").value);$("#copyStatus").textContent="Student link copied.";}catch{$("#joinLink").select();$("#copyStatus").textContent="Select and copy the link above."; }});
 $("#openStudent").addEventListener("click",()=>window.open($("#joinLink").value,"_blank","noopener"));
+function moderatorUrl(g){const u=new URL("moderator.html",location.href);u.searchParams.set("session",sessionId);u.searchParams.set("group",String(g));u.searchParams.set("token",groupTokens[g]||"");return u.href;}
+function setupModeratorLinks(){
+ const el=$("#groupModeratorLinks");el.replaceChildren();el.hidden=!(separateMode&&isSessionOwner);
+ if(el.hidden)return;
+ const label=document.createElement("label");label.textContent="Separate moderator links (share privately)";el.append(label);
+ for(let g=1;g<=groupCount;g++){
+   const row=document.createElement("div");row.className="moderator-link-row";
+   const title=document.createElement("strong");title.textContent="Group "+g;
+   const button=document.createElement("button");button.type="button";button.className="secondary";button.textContent="Copy moderator link";
+   button.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(moderatorUrl(g));$("#copyStatus").textContent="Group "+g+" moderator link copied.";}catch{$("#copyStatus").textContent="Could not copy. Check browser permissions.";}});
+   row.append(title,button);el.append(row);
+ }
+}
 function groupUrl(g){const url=new URL("join.html",location.href);url.searchParams.set("session",sessionId);if(groupCount>1)url.searchParams.set("group",String(g));return url.href;}
 function setupGroupLinks(){
  const el=$("#groupLinks");el.innerHTML="";
@@ -75,15 +128,16 @@ function setupGroupLinks(){
  for(let i=1;i<=groupCount;i++){const o=document.createElement("option");o.value=String(i);o.textContent="Group "+i;select.appendChild(o);}
  select.addEventListener("change",()=>{activeGroup=Number(select.value);$("#joinLink").value=groupUrl(activeGroup);renderJoinQr();});
  el.appendChild(select);
- activeGroup=1;$("#joinLink").value=groupUrl(1);
+ activeGroup=moderatorGroup||1;select.value=String(activeGroup);$("#joinLink").value=groupUrl(activeGroup);
+ if(separateMode&&moderatorGroup)select.disabled=true;
 }
 function renderGroupProgress(){
  const groups=Array.from({length:groupCount},(_,i)=>({group:i+1,online:0,saved:0}));
- Object.values(presenceRows).forEach(p=>{const g=Number(p?.group||1);if(groups[g-1])groups[g-1].online++;});
- Object.values(responseRows).forEach(r=>{const g=Number(r?.participant?.group||1);if(groups[g-1]&&steps.some(t=>r[t.id]&&r[t.id].updatedAt!=null))groups[g-1].saved++;});
+ Object.values(presenceRows).forEach(p=>{const g=moderatorGroup||Number(p?.group||1);if(groups[g-1])groups[g-1].online++;});
+ Object.values(responseRows).forEach(r=>{const g=moderatorGroup||Number(r?.participant?.group||1);if(groups[g-1]&&steps.some(t=>r[t.id]&&r[t.id].updatedAt!=null))groups[g-1].saved++;});
  $("#presence").textContent=groups.reduce((a,g)=>a+g.online,0);
  $("#responseCount").textContent=groups.reduce((a,g)=>a+g.saved,0);
- $("#groupProgress").innerHTML=groupCount===1?"":groups.map(g=>'<span class="group-stat"><strong>Group '+g.group+'</strong> '+g.online+' online · '+g.saved+' saved</span>').join("");
+ $("#groupProgress").innerHTML=groupCount===1?"":groups.filter(g=>!moderatorGroup||g.group===moderatorGroup).map(g=>'<span class="group-stat"><strong>Group '+g.group+'</strong> '+g.online+' online · '+g.saved+' saved</span>').join("");
 }
 function makeQr(target,size){
  target.textContent="";
@@ -102,16 +156,21 @@ function bind(){
  unsubs.forEach(x=>x());unsubs=[];
  const fail=(where,e)=>{$("#syncStatus").textContent="Cannot read "+where+" ("+(e?.code||"connection error")+").";};
  unsubs.push(onValue(ref(db,".info/serverTimeOffset"),s=>{serverOffset=s.val()||0;}));
- unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/state"),s=>{
+ if(separateMode&&!moderatorGroup&&isSessionOwner){
+   unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/groupStates"),s=>{
+    $("#groupStages").innerHTML=Object.entries(s.val()||{}).map(([g,v])=>"<span class=\"group-stat\">Group "+esc(g)+": "+esc(steps[v.currentTab||0]?.label||"Unknown")+"</span>").join("");
+   },e=>fail("group progress",e)));
+ }
+ unsubs.push(onValue(ref(db,statePath()),s=>{
    if(!s.exists()){fail("class state");return;}
    state={currentTab:0,...s.val()};
    if(viewTab===null)viewTab=state.currentTab;
    renderLive();renderView();
    if(isOwner)$("#syncStatus").textContent="Connected to class "+sessionId;
  },e=>fail("class state",e)));
- if(isOwner){
-  unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/presence"),s=>{presenceRows=s.val()||{};renderGroupProgress();},e=>fail("students online",e)));
-  unsubs.push(onValue(ref(db,"responses/"+sessionId),s=>{responseRows=s.val()||{};renderGroupProgress();},e=>fail("saved records",e)));
+ if(isOwner||isSessionOwner){
+  unsubs.push(onValue(ref(db,separateMode&&moderatorGroup?"sessions/"+sessionId+"/groupPresence/"+moderatorGroup:"sessions/"+sessionId+"/presence"),s=>{presenceRows=s.val()||{};renderGroupProgress();},e=>fail("students online",e)));
+  unsubs.push(onValue(ref(db,responsePath()),s=>{responseRows=s.val()||{};renderGroupProgress();},e=>fail("saved records",e)));
  }
 }
 function remaining(){return state.timerPausedRemaining!=null?state.timerPausedRemaining:(state.timerEnd?state.timerEnd-now():null);}
@@ -127,7 +186,7 @@ function renderLive(){
  const draw=()=>{let ms=remaining();if(ms==null){$("#timer").textContent="--:--";$("#timerNote").textContent="";return;}let secs=Math.ceil(Math.max(0,ms)/1000);$("#timer").textContent=Math.floor(secs/60)+":"+String(secs%60).padStart(2,"0");$("#timerNote").textContent=state.timerPausedRemaining!=null?"Paused":ms<=0?"Time is up":"Running";};
  draw();timerInterval=setInterval(draw,500);
 }
-async function patch(next){if(!isOwner||!sessionId)return false;try{await update(ref(db,"sessions/"+sessionId+"/state"),next);return true;}catch(e){$("#syncStatus").textContent="Could not update class: "+(e.code||e.message);return false;}}
+async function patch(next){if(!isOwner||!sessionId)return false;try{await update(ref(db,statePath()),next);return true;}catch(e){$("#syncStatus").textContent="Could not update class: "+(e.code||e.message);return false;}}
 $("#startTimer").addEventListener("click",()=>{
  if(state.timerPausedRemaining!=null)return patch({timerEnd:now()+state.timerPausedRemaining,timerPausedRemaining:null});
  if(state.timerEnd&&state.timerEnd>now())return;
@@ -182,7 +241,7 @@ async function computeSummary(){
  const token=++summaryRequest,step=steps[viewTab].id,code=sessionId;
  $("#publishSummary").disabled=true;$("#summary").textContent="Loading answers...";
  try{
- const snap=await get(ref(db,"responses/"+code));
+ const snap=await get(ref(db,responsePath()));
  if(token!==summaryRequest||steps[viewTab].id!==step||sessionId!==code)return null;
  const rows=Object.values(snap.val()||{}),items={};
  if(["first-impression","preliminary","new-information","final"].includes(step))
@@ -200,6 +259,6 @@ $("#refreshSummary").addEventListener("click",computeSummary);
 $("#publishSummary").addEventListener("click",async()=>{
  if(!isOwner||!summary||summary.step!==steps[viewTab].id||summary.session!==sessionId){$("#summary").textContent="Refresh this step's summary before sharing.";return;}
  const picked=summary;
- try{await set(ref(db,"sessions/"+picked.session+"/published/"+picked.step),picked.payload);$("#summary").insertAdjacentText("beforeend"," Shared with class.");}
+ try{await set(ref(db,publishedPath(picked.step)),picked.payload);$("#summary").insertAdjacentText("beforeend"," Shared with class.");}
  catch(e){$("#summary").textContent="Cannot share summary: "+(e.code||e.message);}
 });

@@ -15,7 +15,7 @@ let db = null, uid = "preview";
 let state = { currentTab: previewMode ? SCENARIO.tabs.length - 1 : 0, timerEnd:null, timerPausedRemaining:null, locked:false };
 let activeTab = 0; let timerInterval; let myResponses = {};
 if (previewMode) { activeTab = 0; myResponses = {}; sessionStorage.removeItem("sparkPreviewTab"); }
-let stateRef = null, responseBase = null;
+let stateRef = null, responseBase = null, groupResponseBase=null, separateMode=false;
 let serverOffset=0, publishedUnsub=null;
 const draftKey = id => "spark_draft_"+sessionId+"_"+uid+"_"+id;
 const getDraft = id => {try{return JSON.parse(sessionStorage.getItem(draftKey(id))||"null");}catch{return null;}};
@@ -33,19 +33,25 @@ if (!previewMode) {
   const cred = await signInAnonymously(auth);
   uid = cred.user.uid;
   stateRef = ref(db, `sessions/${sessionId}/state`);
-  const sessionSnapshot = await new Promise(resolve => onValue(stateRef, resolve, {onlyOnce:true}));
+  const sessionSnapshot = await new Promise((resolve,reject) => onValue(stateRef, resolve, reject, {onlyOnce:true}));
   const groupCount = Number(sessionSnapshot.val()?.groupCount || 0);
+  separateMode=!!sessionSnapshot.val()?.separateModerators;
+  if(separateMode)stateRef=ref(db,`sessions/${sessionId}/groupStates/${groupParam}`);
   if(!sessionSnapshot.exists() || groupCount < 1 || !Number.isInteger(groupParam) || groupParam < 1 || groupParam > groupCount) { location.replace("join.html?session="+encodeURIComponent(sessionId)); throw new Error("Invalid classroom session/group."); }
   responseBase = `responses/${sessionId}/${uid}`;
+  if(separateMode) groupResponseBase=`groupResponses/${sessionId}/${groupParam}/${uid}`;
   const presenceRef = ref(db, `sessions/${sessionId}/presence/${uid}`);
   const aliasKey = "sparkAlias_"+sessionId;
   let alias = sessionStorage.getItem(aliasKey);
   if(!alias){ const animals=["Heron","Fox","Owl","Otter","Raven","Falcon","Turtle","Robin"];const bytes=new Uint8Array(3);crypto.getRandomValues(bytes);alias=animals[bytes[0]%animals.length]+"-"+String((bytes[1]*256+bytes[2])%900+100);sessionStorage.setItem(aliasKey,alias); }
-  await update(ref(db, responseBase+"/participant"), {nickname:alias,group:groupParam});
+  const participantRecord={nickname:alias,group:groupParam};
+  if(groupResponseBase){const updates={};updates[responseBase+"/participant"]=participantRecord;updates[groupResponseBase+"/participant"]=participantRecord;await update(ref(db),updates);}
+  else await update(ref(db,responseBase+"/participant"),participantRecord);
   onValue(ref(db, ".info/connected"), async snap => {
     if(snap.val()!==true)return;
     try { await onDisconnect(presenceRef).remove();
       await set(presenceRef, { online:true, group:groupParam, nickname:alias, joinedAt:serverTimestamp() });
+      if(separateMode){const gp=ref(db,`sessions/${sessionId}/groupPresence/${groupParam}/${uid}`);await onDisconnect(gp).remove();await set(gp,{online:true,group:groupParam,nickname:alias,joinedAt:serverTimestamp()});}
     } catch(e){document.querySelector("#status").textContent="Cannot register class attendance ("+(e?.code||"error")+"). Tell your teacher.";}
   });
  } catch(e) { document.querySelector("#status").textContent="Unable to join class: "+(e?.message||"Connection error")+". Tell your teacher.";db=null;stateRef=null; }
@@ -57,7 +63,7 @@ if (previewMode) {
   $("#status").textContent = "PREVIEW MODE";
   renderTabs(); render(); startTimer();
 } else if(db && stateRef) {
-  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
+  onValue(ref(db,groupResponseBase||responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
   onValue(ref(db,".info/serverTimeOffset"), snap => {serverOffset=snap.val()||0;});
   onValue(stateRef, snap => {
     if(!snap.exists()) { $("#status").textContent="Session not found";return; }
@@ -94,7 +100,8 @@ $("#resetParticipant").addEventListener("click", async () => {
   }
 
   try {
-    await remove(ref(db, responseBase));
+    if(groupResponseBase){const updates={};updates[responseBase]=null;updates[groupResponseBase]=null;await update(ref(db),updates);}
+    else await remove(ref(db,responseBase));
     for(const t of SCENARIO.tabs)discardDraft(t.id);
     renderTabs();
     render();
@@ -130,7 +137,7 @@ async function save(stage, payload){
     if(btn) btn.disabled=false;
     return;
   }
-  try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()}); discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} }
+  try { const saved={...payload, updatedAt:serverTimestamp()};if(groupResponseBase){const updates={};updates[`${responseBase}/${stage}`]=saved;updates[`${groupResponseBase}/${stage}`]=saved;await update(ref(db),updates);}else await update(ref(db,`${responseBase}/${stage}`),saved);discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} }
   catch(e){ const n=document.querySelector('#saveMsg'); if(n){n.textContent='Not saved yet. Check connection and try again.';} }
   finally { if(btn) btn.disabled=false; }
 }
@@ -190,7 +197,7 @@ function render(){
  if(document.querySelector('#publishedSummary')) {
    const el=document.querySelector('#publishedSummary');
    if (previewMode) el.textContent='Live room summaries are not shown in preview mode.';
-   else publishedUnsub=onValue(ref(db,`sessions/${sessionId}/published/${t.id}`),snap=>{if(el.isConnected)el.innerHTML=snap.exists()?renderPublished(snap.val()):'The teacher has not shared a summary yet.';});
+   else publishedUnsub=onValue(ref(db,separateMode?`sessions/${sessionId}/groupPublished/${groupParam}/published/${t.id}`:`sessions/${sessionId}/published/${t.id}`),snap=>{if(el.isConnected)el.innerHTML=snap.exists()?renderPublished(snap.val()):'The teacher has not shared a summary yet.';});
  }
 }
 
