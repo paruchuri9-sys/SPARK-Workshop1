@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, onValue, get, update, set } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { SCENARIO } from "./scenario.js";
+import { SCENARIO } from "./scenario-classroom.js";
 
 const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getDatabase(app); const $=s=>document.querySelector(s);
 let sessionId='', state={currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false}, focusTab=0, timerInterval, latestSummary=null;
@@ -16,42 +16,59 @@ const notes=[
   "Focus on reopening conditions: what future evidence would warrant reconsideration, and what would be insufficient by itself?"
 ];
 
-$('#pinSignIn').addEventListener('click', unlock);
-$('#moderatorPin').addEventListener('keydown',e=>{if(e.key==='Enter')unlock();});
-async function unlock(){
-  const expected=['1','2','3','4'].join('');
-  if($('#moderatorPin').value.trim()!==expected){$('#pinError').textContent='Incorrect PIN.';return;}
-  try{
-    if(!auth.currentUser) await signInAnonymously(auth);
-    $('#pinError').textContent=''; $('#authStatus').textContent='Teacher controls unlocked'; $('#controls').hidden=false; $('#moderatorPin').value=''; if(sessionId) bindSession();
-  }catch(e){console.error(e);$('#pinError').textContent='Could not connect. Confirm Anonymous Authentication is enabled.';}
+
+const params=new URLSearchParams(location.search);
+const remembered=(params.get('session')||'').toUpperCase().replace(/[^A-F0-9]/g,'');
+const showError=message=>{ $('#setupError').textContent=message; $('#authStatus').textContent='Action needed'; };
+async function connectTeacher(){ if(!auth.currentUser) await signInAnonymously(auth); }
+async function openSession(code){
+  await connectTeacher();
+  const snap=await get(ref(db,`sessions/${code}/state`));
+  if(!snap.exists()) throw Error('Session not found. Create a new one.');
+  sessionId=code;
+  $('#setup').hidden=true; $('#classroom').hidden=false;
+  $('#sessionId').textContent=code;
+  $('#sessionLabel').textContent='Ready for students';
+  $('#groupDescription').textContent=Number(snap.val().groupCount||1)===1?'Whole class, with individual responses':snap.val().groupCount+' groups, each student has an individual response';
+  $('#joinLink').value=new URL('join.html?session='+encodeURIComponent(code),location.href).href;
+  $('#authStatus').textContent='Class session '+code;
+  bindSession();
 }
-
-$('#copyJoin').addEventListener('click',async()=>{const input=$('#joinLink');if(!input.value)return;try{await navigator.clipboard.writeText(input.value);$('#pinError').textContent='Student link copied.';}catch{$('#pinError').textContent='Select and copy the student link above.';}});
 $('#createSession').addEventListener('click',async()=>{
-  try{
-    if(!auth.currentUser) await signInAnonymously(auth);
-    let code,exists=true;
-    for(let i=0;i<5&&exists;i++){
-      const bytes=new Uint8Array(5);crypto.getRandomValues(bytes);
-      code=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
-      exists=(await get(ref(db,`sessions/${code}/state`))).exists();
-    }
-    if(exists) throw new Error('Could not find unused code.');
-    const groups=Number($('#groupCount').value);
-    await set(ref(db,`sessions/${code}/state`),{currentTab:0,timerEnd:null,locked:false,groupCount:groups,createdAt:Date.now()});
-    sessionId=code;$('#sessionId').value=code;
-    $('#joinLink').value=new URL('join.html?session='+encodeURIComponent(code),location.href).href;
-    $('#authStatus').textContent='Session '+code+' ready';
-    if(!$('#controls').hidden)bindSession();
-  }catch(e){$('#pinError').textContent='Session creation failed: '+e.message;}
+ const button=$('#createSession');button.disabled=true;$('#setupError').textContent='';
+ try{
+  await connectTeacher();
+  let code,exists=true;
+  for(let i=0;i<8&&exists;i++){const bytes=new Uint8Array(5);crypto.getRandomValues(bytes);code=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();exists=(await get(ref(db,`sessions/${code}/state`))).exists();}
+  if(exists)throw Error('Could not create a unique session. Try again.');
+  await set(ref(db,`sessions/${code}/state`),{currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false,groupCount:Number($('#groupCount').value),createdAt:Date.now()});
+  location.assign('moderator.html?session='+encodeURIComponent(code));
+ }catch(e){showError('Could not create a classroom session: '+e.message);button.disabled=false;}
 });
+$('#copyJoin').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('#joinLink').value);$('#copyStatus').textContent='Student link copied.';}catch(e){$('#joinLink').select();$('#copyStatus').textContent='Select and copy the link above.';}});
+$('#openStudent').addEventListener('click',()=>window.open($('#joinLink').value,'_blank','noopener'));
+if(remembered)openSession(remembered).catch(e=>{showError(e.message);$('#setup').hidden=false;$('#classroom').hidden=true;});
+else $('#authStatus').textContent='Create a class to begin';
 
-let unsubs=[];function bindSession(){ unsubs.forEach(fn=>fn());unsubs=[];sessionId=$('#sessionId').value.replace(/[^a-zA-Z0-9_-]/g,'');if(!sessionId)return; const sref=ref(db,`sessions/${sessionId}/state`); unsubs.push(onValue(sref,snap=>{const next={currentTab:0,...(snap.val()||{})}; if(next.currentTab>state.currentTab)focusTab=next.currentTab; state=next;if(focusTab>state.currentTab)focusTab=state.currentTab;render();})); unsubs.push(onValue(ref(db,`sessions/${sessionId}/presence`),snap=>{$('#presence').textContent=snap.size||Object.keys(snap.val()||{}).length;})); unsubs.push(onValue(ref(db,`responses/${sessionId}`),snap=>{$('#responseCount').textContent=snap.size||Object.keys(snap.val()||{}).length;})); }
-function render(){const t=SCENARIO.tabs[focusTab]||SCENARIO.tabs[0];$('#currentTabLabel').textContent=`${t.label} (unlocked through ${SCENARIO.tabs[state.currentTab]?.label||'Stage 1'})`;$('#facilitation').innerHTML=`<h3>${t.title}</h3><p>${notes[focusTab]}</p>`;$('#lockResponses').checked=!!state.locked;startTimer();$('#next').disabled=state.currentTab>=SCENARIO.tabs.length-1;$('#prev').disabled=focusTab<=0;}
-async function patch(p){await update(ref(db,`sessions/${sessionId}/state`),p);}
-$('#next').addEventListener('click',async()=>{const n=Math.min(SCENARIO.tabs.length-1,state.currentTab+1);focusTab=n;await patch({currentTab:n,locked:false,timerEnd:null,timerPausedRemaining:null});});
-$('#prev').addEventListener('click',()=>{focusTab=Math.max(0,focusTab-1);render();});
+let unsubs=[];
+function bindSession(){
+ unsubs.forEach(fn=>fn());unsubs=[];
+ const fail=(name,e)=>{$('#syncStatus').textContent='Cannot read '+name+'. Check Firebase rules and connection ('+(e?.code||'unknown error')+').';};
+ const sref=ref(db,`sessions/${sessionId}/state`);
+ unsubs.push(onValue(sref,snap=>{if(!snap.exists()){fail('session state');return;}state={currentTab:0,...snap.val()};focusTab=state.currentTab;render();$('#syncStatus').textContent='Teacher connected to session '+sessionId;},e=>fail('session state',e)));
+ unsubs.push(onValue(ref(db,`sessions/${sessionId}/presence`),snap=>{$('#presence').textContent=Object.keys(snap.val()||{}).length;},e=>fail('students online',e)));
+ unsubs.push(onValue(ref(db,`responses/${sessionId}`),snap=>{$('#responseCount').textContent=Object.keys(snap.val()||{}).length;},e=>fail('student answers',e)));
+}
+function render(){
+ const t=SCENARIO.tabs[focusTab]||SCENARIO.tabs[0];
+ $('#currentTabLabel').textContent=t.label+' · '+t.title;
+ $('#facilitation').innerHTML='<h3>'+t.title+'</h3><p>'+notes[focusTab]+'</p>';
+ $('#lockResponses').checked=!!state.locked;startTimer();
+ $('#next').disabled=state.currentTab>=SCENARIO.tabs.length-1;
+ $('#nextHint').textContent=$('#next').disabled?'All steps are available. Students can revisit earlier steps.':'Next: '+SCENARIO.tabs[state.currentTab+1].title;
+}
+async function patch(p){if(!sessionId)throw Error('Create a session first');try{await update(ref(db,`sessions/${sessionId}/state`),p);}catch(e){$('#syncStatus').textContent='Update failed: '+e.message;}}
+$('#next').addEventListener('click',async()=>{if(state.currentTab>=SCENARIO.tabs.length-1)return;await patch({currentTab:state.currentTab+1,locked:false,timerEnd:null,timerPausedRemaining:null});});
 $('#lockResponses').addEventListener('change',e=>patch({locked:e.target.checked}));
 $('#startTimer').addEventListener('click',()=>{const min=SCENARIO.tabs[focusTab].minutes||5;patch({timerEnd:Date.now()+min*60000,timerPausedRemaining:null});});
 $('#pauseTimer').addEventListener('click',()=>{const remain=state.timerEnd?Math.max(0,state.timerEnd-Date.now()):(state.timerPausedRemaining||0);patch({timerEnd:null,timerPausedRemaining:remain});});

@@ -1,0 +1,112 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPARK | Standalone Preview and Classroom Backup</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#182534;background:#f4f6fa}*{box-sizing:border-box}
+body{margin:0}header{background:#fff;border-bottom:1px solid #d8dee8;padding:16px 24px}
+main{max-width:950px;margin:20px auto 60px;padding:0 16px}.card{background:#fff;border:1px solid #d8dee8;border-radius:12px;padding:22px;margin:16px 0}
+h1{font-size:1.45rem;margin:0 0 8px}h2{font-size:1.2rem;margin:0 0 10px}h3{font-size:1rem}
+.muted{color:#536276;line-height:1.5}.notice{padding:14px;background:#e9f0ff;border-radius:8px;line-height:1.5}
+nav{display:flex;gap:8px;overflow:auto;padding:7px 0}.tab{white-space:nowrap;border:1px solid #c9d5e6;border-radius:9px;padding:10px 13px;background:#fff;color:#253f65;cursor:pointer}
+.tab.active{background:#3157a5;color:white}.tab.done:after{content:" ✓"}label{display:block;font-weight:600;margin:16px 0 6px}
+textarea{min-height:92px;width:100%;border:1px solid #b8c3d3;border-radius:7px;padding:10px;font:inherit}
+.choice{font-weight:normal;margin:9px 0;padding:4px}.choice input{margin-right:10px}
+input[type=range]{max-width:320px;width:95%}.buttons{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+button{padding:10px 14px;background:#3157a5;color:white;border:0;border-radius:8px;cursor:pointer;font-weight:600}
+button.secondary{background:#edf1f7;color:#253449}button:disabled{opacity:.45;cursor:default}
+.packet{border-left:4px solid #72839c;background:#f8fafc;padding:8px 15px;margin:12px 0;line-height:1.55}
+.status{color:#157347;font-weight:600;margin-top:12px}.flex{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+@media print{header,nav,.buttons,.notice,.status{display:none!important}textarea{border:0;min-height:0}.card{break-inside:avoid}}
+</style></head><body><header><div class="flex"><strong>SPARK | Standalone Scenario</strong><span class="muted">Offline-capable preview and emergency backup</span></div></header>
+<main><div class="notice"><strong>Separate from live classroom.</strong> No Firebase, login, session code, or teacher synchronization. Entries stay in this browser when browser storage is available. <strong>Export responses</strong> to retain them or provide them through an approved process. Do not enter names or identifying information. This file cannot substitute for required student-data authorization.</div>
+<div class="buttons"><button id="export" type="button">Export responses (JSON)</button><button class="secondary" id="print" type="button">Print page</button><button class="secondary" id="reset" type="button">Clear local responses</button></div>
+<nav id="tabs" aria-label="Scenario stages"></nav><div id="content" aria-live="polite"></div>
+<div class="buttons"><button class="secondary" id="prev" type="button">Previous stage</button><button id="save" type="button">Save locally</button><button id="next" type="button">Next stage</button></div><p id="status" class="status" role="status"></p>
+<p class="muted">Scenario snapshot: SPARK v2 Data Center, October 23, 2026. Later changes to the live scenario will not automatically update this standalone copy.</p></main><script>
+const SCENARIO = {
+  title: "Data Center Decision Under Uncertainty",
+  subtitle: "SPARK Workshop Scenario Player",
+  tabs: [
+    {id:"first-impression",label:"1. First Impression",minutes:5,title:"First Impression",intro:"Community decisions often begin before all relevant information is available.",body:["A technology infrastructure developer is proposing a large AI data center in a central Arkansas community.","The proposed project represents approximately $1 billion in initial investment.","The first facility would be approximately 300,000 square feet.","The project is expected to create substantial construction employment.","Approximately 50 permanent jobs are currently anticipated.","Approximately 160 acres are associated with the proposed development area.","The project includes substantial long-term property-tax incentives.","Additional data-center buildings could potentially be developed in the future.","Several infrastructure and implementation details are still being developed."],responseType:"initial"},
+    {id:"need-to-know",label:"2. Need to Know",minutes:6,title:"What do we need to know?",intro:"Identify the unanswered questions that could affect your recommendation.",body:["Individually identify the three most important unanswered questions that could affect your recommendation.","Then discuss your questions with your group. Combine similar questions, identify which matter most, discuss why they matter, and consider where useful evidence might come from.","Possible sources include city records, utility information, planning documents, technical experts, project developers, independent studies, community members, and state or federal agencies."],responseType:"questions"},
+    {id:"investigate",label:"3. Investigate",minutes:7,title:"Decide what to investigate",intro:"Your group has limited time before providing its preliminary recommendation.",body:["Select two information areas and explain why they matter."],options:["Economic benefits and tax structure","Electricity and grid requirements","Cooling water and wastewater","Infrastructure and public costs","Land use and planning","Community concerns","Developer and end-user information"],responseType:"investigation"},
+    {id:"evidence",label:"4. Evidence",minutes:10,title:"Review the information",intro:"Review the available information. Previous tabs remain available.",packets:[
+      {key:"Economic benefits and tax structure",text:"The project represents approximately $1 billion in proposed initial investment and approximately 50 permanent jobs, in addition to temporary construction employment. The proposed economic-development arrangement includes substantial property-tax incentives over an extended period. The project could produce additional local and regional economic activity. However, the eventual net public benefit depends partly on the final incentive agreement, infrastructure responsibilities, operating impacts, and whether additional development occurs."},
+      {key:"Electricity and grid requirements",text:"A large data center requires substantial electrical service. Current project planning anticipates utility infrastructure for the initial facility. Larger future electrical requirements may require additional coordination and potentially significant infrastructure investment. Some questions about long-term capacity, future expansion, infrastructure needs, responsibility for costs, and possible effects on other utility customers remain unresolved in the currently available information."},
+      {key:"Cooling water and wastewater",text:"Current planning contemplates using treated wastewater or effluent as part of the cooling system rather than relying solely on drinking water. Additional pumping and pipeline infrastructure would be required. A separate discharge or blowdown system may also be necessary. Some final operating quantities, infrastructure requirements, and implementation details remain under development."},
+      {key:"Infrastructure and public costs",text:"The project may require roadway modifications, utility improvements, new pipelines, pumping infrastructure, and other supporting systems. Responsibility for the timing and financing of some infrastructure improvements is still being negotiated. The project could therefore create both economic benefits and infrastructure obligations."},
+      {key:"Land use and planning",text:"The proposed development area has been evaluated for industrial use. Planning analysis found the proposed land use generally compatible with surrounding development and considered expected traffic effects manageable within the scope of that review. However, land-use approval does not itself answer broader questions about utilities, fiscal effects, environmental impacts, or long-term community consequences."},
+      {key:"Community concerns",text:"Community members have raised questions about electricity capacity and possible rate impacts, water and wastewater, environmental effects, transparency, the pace of decision making, economic benefits, and the eventual operator of the facility. These concerns identify issues residents believe require attention. However, a concern by itself does not establish how large or likely an impact will be."},
+      {key:"Developer and end-user information",text:"The project development entity is publicly identifiable. The eventual major technology user has not been fully disclosed publicly. Some details about future operations, expansion, resource requirements, and operating practices therefore remain difficult to independently evaluate from the currently available information."}],responseType:"evidence-review"},
+    {id:"preliminary",label:"5. Preliminary",minutes:8,title:"Preliminary recommendation",intro:"Make a preliminary recommendation using the information currently available.",responseType:"recommendation"},
+    {id:"new-information",label:"6. New Information",minutes:6,title:"New information",intro:"Your group now receives additional information.",body:["The proposed initial facility may not represent the full eventual development.","Existing project arrangements contemplate the possibility of additional data-center buildings if future conditions support expansion.","Some infrastructure timing and financing arrangements remain under negotiation.","Decisions made regarding the initial project could therefore influence a substantially larger future development.","Do not assume that new information automatically requires changing your position."],responseType:"update"},
+    {id:"final",label:"7. Reconsider",minutes:5,title:"Final recommendation and reconsideration",intro:"Make your current recommendation and identify what could reopen it later.",responseType:"final"}
+  ]
+};
+const RECOMMENDATIONS=["Proceed","Proceed with conditions","Defer pending more information","Oppose"];
+
+(function(){
+"use strict";
+const key="spark_standalone_20261023",tabs=SCENARIO.tabs;
+let responses={},active=0,storage=false;
+try{const x=localStorage.getItem(key);if(x)responses=JSON.parse(x)||{};storage=true;}catch(e){storage=false;}
+const el=id=>document.getElementById(id);
+function e(s){return String(s??"").replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function field(name,label){return '<label for="'+e(name)+'">'+e(label)+'</label><textarea name="'+e(name)+'" id="'+e(name)+'"></textarea>';}
+function selectRec(){return RECOMMENDATIONS.map(function(v){return '<label class="choice"><input type="radio" name="recommendation" value="'+e(v)+'">'+e(v)+'</label>';}).join("");}
+function confidence(){return '<label for="confidence">Confidence: <output id="confidenceValue">50</output>%</label><input type="range" id="confidence" name="confidence" min="0" max="100" value="50">';}
+function form(t){
+switch(t.responseType){
+case "initial":return '<h2>Your first impression</h2>'+selectRec()+confidence()+field("factors","Two or three factors most important to your recommendation");
+case "questions":return '<h2>Important unanswered questions</h2>'+field("q1","Question 1")+field("q2","Question 2")+field("q3","Question 3")+field("sources","Where might useful evidence come from?");
+case "investigation":return '<h2>Select two areas to investigate</h2>'+(t.options||[]).map(function(v){return '<label class="choice"><input type="checkbox" name="area" value="'+e(v)+'">'+e(v)+'</label>';}).join("")+field("why","Why those areas?")+field("hope","What do you hope to learn?");
+case "evidence-review":return field("review","What did you learn? What remains unresolved?");
+case "recommendation":return '<h2>Preliminary recommendation</h2>'+selectRec()+field("evidence","What evidence matters most?")+field("reasoning","Why does it matter and what remains uncertain?")+confidence();
+case "update":return '<h2>Reconsideration</h2>'+selectRec()+confidence()+field("why","Why are you maintaining or changing your recommendation?");
+case "final":return '<h2>Current recommendation</h2>'+selectRec()+field("reopen","What future evidence would make you reconsider?")+field("insufficient","What new information would not, by itself, be enough?");
+default:return "";
+}}
+function persist(){try{localStorage.setItem(key,JSON.stringify(responses));return true;}catch(e){return false;}}
+function fill(t){
+const r=responses[t.id]||{},f=el("form");
+Object.keys(r).forEach(function(name){if(name==="area")return;if(name==="recommendation"){const x=Array.from(f.querySelectorAll('[name="recommendation"]')).find(function(n){return n.value===r[name];});if(x)x.checked=true;return;}const x=f.elements.namedItem(name);if(x)x.value=r[name];});
+if(Array.isArray(r.area))f.querySelectorAll('[name="area"]').forEach(function(x){x.checked=r.area.includes(x.value);});
+const c=el("confidence");if(c)c.addEventListener("input",function(){el("confidenceValue").textContent=c.value;});
+if(c)el("confidenceValue").textContent=c.value;
+}
+function draw(){
+const t=tabs[active];
+el("tabs").innerHTML=tabs.map(function(x,i){return '<button type="button" class="tab '+(i===active?'active ':'')+(responses[x.id]?'done':'')+'" data-index="'+i+'">'+e(x.label)+'</button>';}).join("");
+el("tabs").querySelectorAll("button").forEach(function(b){b.addEventListener("click",function(){save();active=Number(b.dataset.index);draw();});});
+let html='<section class="card"><h1>'+e(t.title)+'</h1><p class="muted">'+e(t.intro||"")+'</p>';
+if(t.body&&t.body.length)html+='<ul>'+t.body.map(function(v){return '<li>'+e(v)+'</li>';}).join("")+'</ul>';
+html+='</section>';
+if(t.packets){html+='<section class="card"><h2>Evidence packets</h2>'+t.packets.map(function(p){return '<details class="packet"><summary><strong>'+e(p.key)+'</strong></summary><p>'+e(p.text)+'</p></details>';}).join("")+'</section>';}
+html+='<section class="card"><form id="form">'+form(t)+'</form></section>';
+el("content").innerHTML=html;fill(t);el("prev").disabled=active===0;el("next").disabled=active===tabs.length-1;
+el("status").textContent=(storage?"Browser storage available. ":"Browser storage unavailable; export before leaving. ")+(responses[t.id]?"Saved response restored.":"");
+}
+function save(){
+const t=tabs[active],f=el("form"),data={};
+if(!f)return;
+Array.from(f.elements).forEach(function(x){
+if(!x.name)return;
+if(x.type==="radio"){if(x.checked)data[x.name]=x.value;}
+else if(x.type==="checkbox"){if(!data[x.name])data[x.name]=[];if(x.checked)data[x.name].push(x.value);}
+else data[x.name]=x.value;
+});
+responses[t.id]=data;
+el("status").textContent=persist()?"Saved locally.":"Held only until this page closes. Export responses now.";
+el("tabs").querySelectorAll("button")[active].classList.add("done");
+}
+el("save").addEventListener("click",save);
+el("prev").addEventListener("click",function(){save();if(active>0)active--;draw();});
+el("next").addEventListener("click",function(){save();if(active<tabs.length-1)active++;draw();});
+el("reset").addEventListener("click",function(){if(!confirm("Clear all saved local responses?"))return;responses={};try{localStorage.removeItem(key);}catch(e){}active=0;draw();});
+el("print").addEventListener("click",function(){save();window.print();});
+el("export").addEventListener("click",function(){
+save();const payload={scenario:SCENARIO.title,snapshot:"2026-10-23",exportedAt:new Date().toISOString(),mode:"standalone-no-live-sync",responses:responses};
+const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="spark-local-responses.json";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);
+});
+draw();
+})();
+</script></body></html>
