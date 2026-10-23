@@ -234,7 +234,12 @@ function wireExitTicket(){
    exitStatus="submitted";sessionStorage.setItem(exitKey,"yes");
    render();
   }catch(error){
-   document.querySelector("#exitMessage").textContent="Feedback not saved. Try again, or skip it.";
+   const code=String(error?.code||"").toLowerCase();
+   const denied=code.includes("permission")||/permission.denied/i.test(error?.message||"");
+   console.error("SPARK exit-ticket submission failed",{sessionId,errorCode:error?.code,message:error?.message});
+   document.querySelector("#exitMessage").textContent=denied
+    ?"Feedback not saved: Firebase permission denied. Tell your teacher the exit-ticket database rules need checking. Your typed answers are still on this page."
+    :"Feedback not saved ("+(error?.code||"connection error")+"). Check your connection and try again. Your typed answers are still on this page.";
    btn.disabled=false;
   }
  });
