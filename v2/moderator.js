@@ -17,14 +17,32 @@ const connect = async () => {if(!auth.currentUser)await signInAnonymously(auth);
 
 $("#createSession").addEventListener("click",async()=>{
  const btn=$("#createSession");btn.disabled=true;$("#setupError").textContent="";
+ let operation="signing in", code="", ownerSaved=false, sessionSaved=false;
  try{
-   await connect();let code,exists=true;
-   for(let i=0;i<8&&exists;i++){const bytes=new Uint8Array(3);crypto.getRandomValues(bytes);code=(Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("").slice(0,5)).toUpperCase();exists=(await get(ref(db,"sessions/"+code+"/owner"))).exists();}
-   if(exists)throw Error("Unable to find an unused code.");
+   await connect();
+   let exists=true;
+   for(let i=0;i<8&&exists;i++){
+     const bytes=new Uint8Array(3);crypto.getRandomValues(bytes);
+     code=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("").slice(0,5).toUpperCase();
+     operation="checking classroom code availability";
+     exists=(await get(ref(db,"sessions/"+code+"/owner"))).exists();
+   }
+   if(exists)throw Error("Unable to find an unused classroom code.");
+   operation="creating classroom owner record";
    await set(ref(db,"sessions/"+code+"/owner"),auth.currentUser.uid);
+   ownerSaved=true;
+   operation="creating classroom session state";
    await set(ref(db,"sessions/"+code+"/state"),{currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false,groupCount:Number($("#groupCount").value),createdAt:Date.now()});
+   sessionSaved=true;
    location.assign("moderator.html?session="+encodeURIComponent(code));
- }catch(e){showError("Could not create a class: "+(e.code||e.message)+". If it partially succeeded, contact the SPARK team.");btn.disabled=false;}
+ }catch(e){
+   console.error("SPARK classroom creation failed", {operation,code,errorCode:e?.code,message:e?.message,ownerSaved,sessionSaved});
+   const permission=e?.code==="PERMISSION_DENIED"||e?.code==="permission-denied"||/permission.denied/i.test(e?.message||"");
+   const details=permission?" Firebase denied this operation. The deployed database rules may not match the repository.":" "+(e?.code||e?.message||"Unknown error")+".";
+   const partial=ownerSaved&&!sessionSaved?" A session owner record was created, but the classroom could not be initialized. Keep this code for support: "+code+".":"";
+   showError("Could not create class while "+operation+"."+details+partial);
+   btn.disabled=false;
+ }
 });
 async function openSession(code){
  await connect();
