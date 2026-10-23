@@ -5,7 +5,7 @@ import { firebaseConfig } from "./firebase-config.js";
 import { SCENARIO } from "./scenario.js";
 
 const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getDatabase(app); const $=s=>document.querySelector(s);
-let sessionId='demo', state={currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false}, focusTab=0, timerInterval, latestSummary=null;
+let sessionId='', state={currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false}, focusTab=0, timerInterval, latestSummary=null;
 const notes=[
   "Capture the unaided individual first impression before group discussion. Do not reward any recommendation direction.",
   "Let participants distinguish what is known from what needs to be known. Ask why a missing fact could matter.",
@@ -23,11 +23,31 @@ async function unlock(){
   if($('#moderatorPin').value.trim()!==expected){$('#pinError').textContent='Incorrect PIN.';return;}
   try{
     if(!auth.currentUser) await signInAnonymously(auth);
-    $('#pinError').textContent=''; $('#authStatus').textContent='Moderator unlocked'; $('#controls').hidden=false; $('#moderatorPin').value=''; bindSession();
+    $('#pinError').textContent=''; $('#authStatus').textContent='Teacher controls unlocked'; $('#controls').hidden=false; $('#moderatorPin').value=''; if(sessionId) bindSession();
   }catch(e){console.error(e);$('#pinError').textContent='Could not connect. Confirm Anonymous Authentication is enabled.';}
 }
-$('#sessionId').addEventListener('change',()=>{if(!$('#controls').hidden)bindSession();});
-function bindSession(){ sessionId=$('#sessionId').value.replace(/[^a-zA-Z0-9_-]/g,'')||'demo'; const sref=ref(db,`sessions/${sessionId}/state`); onValue(sref,snap=>{const next={currentTab:0,...(snap.val()||{})}; if(next.currentTab>state.currentTab)focusTab=next.currentTab; state=next;if(focusTab>state.currentTab)focusTab=state.currentTab;render();}); onValue(ref(db,`sessions/${sessionId}/presence`),snap=>{$('#presence').textContent=snap.size||Object.keys(snap.val()||{}).length;}); onValue(ref(db,`responses/${sessionId}`),snap=>{$('#responseCount').textContent=snap.size||Object.keys(snap.val()||{}).length;}); }
+
+$('#copyJoin').addEventListener('click',async()=>{const input=$('#joinLink');if(!input.value)return;try{await navigator.clipboard.writeText(input.value);$('#pinError').textContent='Student link copied.';}catch{$('#pinError').textContent='Select and copy the student link above.';}});
+$('#createSession').addEventListener('click',async()=>{
+  try{
+    if(!auth.currentUser) await signInAnonymously(auth);
+    let code,exists=true;
+    for(let i=0;i<5&&exists;i++){
+      const bytes=new Uint8Array(5);crypto.getRandomValues(bytes);
+      code=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
+      exists=(await get(ref(db,`sessions/${code}/state`))).exists();
+    }
+    if(exists) throw new Error('Could not find unused code.');
+    const groups=Number($('#groupCount').value);
+    await set(ref(db,`sessions/${code}/state`),{currentTab:0,timerEnd:null,locked:false,groupCount:groups,createdAt:Date.now()});
+    sessionId=code;$('#sessionId').value=code;
+    $('#joinLink').value=new URL('join.html?session='+encodeURIComponent(code),location.href).href;
+    $('#authStatus').textContent='Session '+code+' ready';
+    if(!$('#controls').hidden)bindSession();
+  }catch(e){$('#pinError').textContent='Session creation failed: '+e.message;}
+});
+
+let unsubs=[];function bindSession(){ unsubs.forEach(fn=>fn());unsubs=[];sessionId=$('#sessionId').value.replace(/[^a-zA-Z0-9_-]/g,'');if(!sessionId)return; const sref=ref(db,`sessions/${sessionId}/state`); unsubs.push(onValue(sref,snap=>{const next={currentTab:0,...(snap.val()||{})}; if(next.currentTab>state.currentTab)focusTab=next.currentTab; state=next;if(focusTab>state.currentTab)focusTab=state.currentTab;render();})); unsubs.push(onValue(ref(db,`sessions/${sessionId}/presence`),snap=>{$('#presence').textContent=snap.size||Object.keys(snap.val()||{}).length;})); unsubs.push(onValue(ref(db,`responses/${sessionId}`),snap=>{$('#responseCount').textContent=snap.size||Object.keys(snap.val()||{}).length;})); }
 function render(){const t=SCENARIO.tabs[focusTab]||SCENARIO.tabs[0];$('#currentTabLabel').textContent=`${t.label} (unlocked through ${SCENARIO.tabs[state.currentTab]?.label||'Stage 1'})`;$('#facilitation').innerHTML=`<h3>${t.title}</h3><p>${notes[focusTab]}</p>`;$('#lockResponses').checked=!!state.locked;startTimer();$('#next').disabled=state.currentTab>=SCENARIO.tabs.length-1;$('#prev').disabled=focusTab<=0;}
 async function patch(p){await update(ref(db,`sessions/${sessionId}/state`),p);}
 $('#next').addEventListener('click',async()=>{const n=Math.min(SCENARIO.tabs.length-1,state.currentTab+1);focusTab=n;await patch({currentTab:n,locked:false,timerEnd:null,timerPausedRemaining:null});});
