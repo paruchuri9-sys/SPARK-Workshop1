@@ -27,7 +27,9 @@ async function verify(){
     if(!snap.exists() || !Number.isInteger(Number(snap.val().groupCount)) || Number(snap.val().groupCount)<1 || Number(snap.val().groupCount)>8)throw new Error('This classroom code is not active.');
     groupCount=Number(snap.val().groupCount);validatedCode=code;
     $('group').innerHTML=Array.from({length:groupCount},(_,i)=>'<option value="'+(i+1)+'">'+(groupCount===1?'Whole class':'Group '+(i+1))+'</option>').join('');
-    $('note').textContent=groupCount===1?'Your class is participating as one group.':'Choose the group assigned by your teacher.';
+    const assigned=Number(query.get('group'));
+    if(Number.isInteger(assigned)&&assigned>=1&&assigned<=groupCount){$('group').value=String(assigned);$('note').textContent='Your teacher linked you to Group '+assigned+'.';}
+    else $('note').textContent=groupCount===1?'Your class is participating as one group.':'Choose the group assigned by your teacher.';
   }catch(e){$('error').textContent='Unable to join. Check your code or ask your teacher.';}
   finally{$('join').disabled=false;}
 }
