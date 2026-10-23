@@ -8,14 +8,14 @@
 <div class="card session-compact"><div class="session-header"><div><p class="eyebrow">CLASSROOM SESSION</p><h1 id="sessionLabel">Classroom ready</h1><p class="muted">Students join using this code, link, or QR.</p></div><a id="newSessionLink" href="moderator.html">Start another class</a></div>
 <div class="session-tools">
  <div class="session-code-area"><label>Class code</label><p id="sessionId" class="session-code" aria-label="Student classroom code"></p><p id="groupDescription" class="muted"></p></div>
- <div class="join-link-area"><label for="joinLink">Student join link</label><input id="joinLink" readonly><div class="actions"><button id="copyJoin" class="secondary" type="button">Copy link</button><button id="openStudent" class="secondary" type="button">Test student join</button></div><p id="copyStatus" class="saved" role="status"></p><p class="join-activity"><strong id="presence">...</strong> connected now · <strong id="responseCount">...</strong> with saved records</p></div>
+ <div class="join-link-area"><label for="joinLink">Student join link</label><div id="groupLinks" class="group-links" aria-label="Group join links"></div><input id="joinLink" readonly><div class="actions"><button id="copyJoin" class="secondary" type="button">Copy link</button><button id="openStudent" class="secondary" type="button">Test student join</button></div><p id="copyStatus" class="saved" role="status"></p><p class="join-activity"><strong id="presence">...</strong> connected now · <strong id="responseCount">...</strong> with saved records</p><div id="groupProgress" class="group-progress" aria-live="polite"></div></div>
  <div class="qr-area"><div id="qrCode" aria-label="QR code for the student join link"></div><button id="enlargeQr" class="secondary" type="button">Enlarge QR</button></div>
 </div></div>
 <div class="card classroom-control-card">
 <div class="live-control-layout">
  <div><p class="eyebrow">STUDENTS ARE ON</p><strong id="liveLabel">Connecting...</strong><p id="nextLiveLabel" class="muted"></p></div>
  <div class="timer-box"><div id="timer" class="timer big-timer">--:--</div><div id="timerNote" class="muted"></div><div class="actions timer-actions"><button id="startTimer" class="secondary" type="button">Start timer</button><button id="pauseTimer" class="secondary" type="button">Pause</button><button id="addMinute" class="secondary" type="button">+1 min</button><button id="resetTimer" class="secondary" type="button">Clear</button></div></div>
- <div class="live-advance"><button id="advanceLive" class="primary" type="button">Open next step</button><button id="advanceTimed" class="secondary" type="button">Open next + timer</button></div>
+ <div class="live-advance"><button id="advanceTimed" class="primary" type="button">Open next + timer</button><button id="advanceLive" class="secondary" type="button">Open next without timer</button></div>
 </div>
 <details><summary>More classroom controls</summary><label class="choice"><input id="lockResponses" type="checkbox"> Stop students from editing answers</label></details>
 <p id="syncStatus" role="status" class="muted">Checking connection...</p>
