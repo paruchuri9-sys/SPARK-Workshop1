@@ -270,7 +270,7 @@ function render(){
  }
  if(t.responseType==='recommendation') html += `<form class="card" id="form"><h2>What do you recommend now?</h2>${recOptions('rec')}<label>Which evidence matters most to your choice?</label><textarea id="evidence"></textarea><label>Why does that evidence matter? What are you still unsure about?</label><textarea id="reasoning"></textarea><label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><div class="actions"><button class="primary" data-save>Save preliminary recommendation</button><span id="saveMsg"></span></div></form><div class="card"><h2>Room snapshot</h2><div id="publishedSummary" class="muted">The moderator has not published a snapshot yet.</div></div>`;
  if(t.responseType==='update') html += `<form class="card" id="form"><h2>Does the new information matter to your decision?</h2>${recOptions('rec')}<label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><label>Why are you keeping or changing your recommendation?</label><textarea id="why"></textarea><div class="actions"><button class="primary" data-save>Save update</button><span id="saveMsg"></span></div></form>`;
- if(t.id==="final"&&myResponses.final?.updatedAt&&exitStatus!=="submitted"&&sessionStorage.getItem(exitKey)!=="yes")html+='<div class="notice"><strong>Final decision saved.</strong> <a href="#exitSection">Continue to optional student feedback ↓</a></div>';
+ if(t.id==="final"&&isStageSubmitted(myResponses.final)&&exitStatus!=="submitted"&&sessionStorage.getItem(exitKey)!=="yes")html+='<div class="notice"><strong>Final decision saved.</strong> <a href="#exitSection">Continue to optional student feedback ↓</a></div>';
  if(t.responseType==='final') html += `<form class="card" id="form"><h2>Your decision after considering the evidence</h2>${recOptions('rec')}<label>Why is this your choice now?</label><textarea id="finalReason"></textarea><label>What could happen or what could you learn that would make you reconsider?</label><textarea id="reopen"></textarea><label>What new information would NOT be enough to change your mind by itself?</label><textarea id="insufficient"></textarea><div class="actions"><button class="primary" data-save>Save final response</button><span id="saveMsg"></span></div></form>`;
  if(t.id==="final")html+=exitTicketHtml();
  $("#app").innerHTML=html;
@@ -318,7 +318,7 @@ function exitTicketHtml(){
  "What important information or viewpoint was missing?",
  "Would you want to do another scenario like this? Why or why not?"
  ];
- const unlocked=!!myResponses.final?.updatedAt;
+ const unlocked=isStageSubmitted(myResponses.final);
  return '<section class="card exit-ticket" id="exitSection"><h2>Help us improve SPARK</h2><p class="muted">Optional feedback. We do not ask for your name, and this form is saved separately from your scenario answers. Please do not include names or identifying details. You can skip it.</p>'+
  (unlocked?'<form id="exitTicketForm">'+prompts.map((q,i)=>'<label for="exitQ'+(i+1)+'">'+(i+1)+'. '+esc(q)+'</label><textarea id="exitQ'+(i+1)+'" maxlength="1200" rows="3"></textarea>').join('')+
  '<div class="actions"><button class="primary" type="submit" id="exitSubmit">Send feedback</button><button class="secondary" type="button" id="exitSkip">Skip feedback</button><span id="exitMessage" role="status"></span></div></form>':
@@ -330,7 +330,7 @@ function wireExitTicket(){
  document.querySelector("#exitSkip").addEventListener("click",()=>{exitStatus="skipped";render();});
  form.addEventListener("submit",async e=>{
   e.preventDefault();
-  if(!myResponses.final?.updatedAt){document.querySelector("#exitMessage").textContent="Save your final decision first.";return;}
+  if(!isStageSubmitted(myResponses.final)){document.querySelector("#exitMessage").textContent="Save your final decision first.";return;}
   const btn=document.querySelector("#exitSubmit");btn.disabled=true;
   const answers=Object.fromEntries([1,2,3,4,5].map(i=>["q"+i,document.querySelector("#exitQ"+i).value.trim()]));
   try{
