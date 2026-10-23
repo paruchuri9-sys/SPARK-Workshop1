@@ -79,3 +79,32 @@ details summary { cursor: pointer; font-weight: 650; }
 .step-chip.future{color:var(--muted)}.read-aloud{padding-left:24px;font-size:1.1rem;line-height:1.6}
 .read-aloud li{margin-bottom:12px}.big-timer{font-size:2rem}.timer-box{text-align:right}
 #setup strong{display:block;margin-top:10px;line-height:1.55}
+
+/* Classroom visual hierarchy */
+.classroom-control-card {border-left:5px solid #3157a5; background:#f5f8ff}
+.step-guide-card {border-left:5px solid #7559a6}
+.student-status-card {border-left:5px solid #2b8069}
+.prompt-panel {background:#f6f2fc;border:1px solid #ddd2ef;border-radius:10px;padding:16px 19px;margin:12px 0 16px}
+.prompt-panel h3 {margin:0 0 10px;color:#514078}
+.prompt-panel .read-aloud {margin:6px 0 10px}
+.prompt-panel .teacher-tip {border-top:1px solid #ddd2ef;padding-top:10px;color:#4f4562;font-size:.95rem}
+.timer-actions {margin-top:12px}
+.timer-actions button {padding:9px 12px}
+.classroom-join-grid {align-items:start}
+.qr-area {margin-top:16px;display:flex;align-items:center}
+#qrCode {display:inline-block;padding:8px;background:white;border:1px solid #d0d5dd;border-radius:10px}
+#qrCode img {display:block}
+.qr-hint {margin:4px 0 8px}
+#qrDialog {max-width:min(90vw,460px);border:1px solid #d0d5dd;border-radius:12px;padding:24px;text-align:center}
+#qrDialog::backdrop {background:rgba(10,18,35,.7)}
+#qrLarge {display:flex;justify-content:center;margin:20px auto}
+#qrLarge img {max-width:100%}
+.fact-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,255px),1fr));gap:14px;margin:14px 0}
+.fact-grid .fact-card {margin:0;padding:21px}
+.fact-tone-0 {background:#eff5ff;border-color:#bfd2ef}
+.fact-tone-1 {background:#eff8f2;border-color:#bddcc8}
+.fact-tone-2 {background:#fff7eb;border-color:#e8d0aa}
+.fact-card h2 {font-size:1.12rem}
+.fact-card li {font-size:1.03rem;line-height:1.7;margin-bottom:12px}
+.stage-intro {border-left:5px solid #3157a5}
+@media (max-width:650px) {.fact-grid{grid-template-columns:1fr}.timer-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.qr-area{justify-content:center}}
