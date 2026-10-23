@@ -18,6 +18,7 @@ if (previewMode) { activeTab = 0; myResponses = {}; sessionStorage.removeItem("s
 let stateRef = null, responseBase = null;
 
 if (!previewMode) {
+ try {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   db = getDatabase(app);
@@ -34,8 +35,13 @@ if (!previewMode) {
   let alias = sessionStorage.getItem(aliasKey);
   if(!alias){ const animals=["Heron","Fox","Owl","Otter","Raven","Falcon","Turtle","Robin"];const bytes=new Uint8Array(3);crypto.getRandomValues(bytes);alias=animals[bytes[0]%animals.length]+"-"+String((bytes[1]*256+bytes[2])%900+100);sessionStorage.setItem(aliasKey,alias); }
   await update(ref(db, responseBase+"/participant"), {nickname:alias,group:groupParam});
-  await onDisconnect(presenceRef).remove();
-  await set(presenceRef, { online:true, group:groupParam, nickname:alias, joinedAt:serverTimestamp() });
+  onValue(ref(db, ".info/connected"), async snap => {
+    if(snap.val()!==true)return;
+    try { await onDisconnect(presenceRef).remove();
+      await set(presenceRef, { online:true, group:groupParam, nickname:alias, joinedAt:serverTimestamp() });
+    } catch(e){document.querySelector("#status").textContent="Cannot register class attendance ("+(e?.code||"error")+"). Tell your teacher.";}
+  });
+ } catch(e) { document.querySelector("#status").textContent="Unable to join class: "+(e?.message||"Connection error")+". Tell your teacher.";db=null;stateRef=null; }
 }
 const $ = s => document.querySelector(s);
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
@@ -43,7 +49,7 @@ const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">
 if (previewMode) {
   $("#status").textContent = "PREVIEW MODE";
   renderTabs(); render(); startTimer();
-} else {
+} else if(db && stateRef) {
   onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; render(); }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
   onValue(stateRef, snap => {
     if(!snap.exists()) { $("#status").textContent="Session not found";return; }
