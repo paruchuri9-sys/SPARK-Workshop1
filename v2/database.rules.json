@@ -101,7 +101,7 @@
             },
             "slots": {
               "$slotId": {
-                ".validate": "newData.val() === true && root.child('meetingPolls').child($pollId).child('config').child('slots').child($slotId).exists()"
+                ".validate": "newData.val() === true && ($slotId === 'none' || root.child('meetingPolls').child($pollId).child('config').child('slots').child($slotId).exists())"
               }
             },
             "$other": {
@@ -116,7 +116,7 @@
             ".validate": "newData.hasChildren(['slots'])",
             "slots": {
               "$slotId": {
-                ".validate": "newData.val() === true && root.child('meetingPolls').child($pollId).child('config').child('slots').child($slotId).exists()"
+                ".validate": "newData.val() === true && ($slotId === 'none' || root.child('meetingPolls').child($pollId).child('config').child('slots').child($slotId).exists())"
               }
             },
             "$other": {
