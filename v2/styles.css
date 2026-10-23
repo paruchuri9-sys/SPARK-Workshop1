@@ -42,3 +42,32 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .packet-hint { color:var(--muted); font-size:13px; white-space:nowrap; }
 .packet-hidden { margin:0 0 12px; border:1px solid var(--border); border-top:0; border-left:4px solid #98a2b3; border-radius:0 0 10px 10px; padding:14px 16px; background:#fff; }
 .packet-hidden p { margin:0; }
+
+/* Classroom teacher and middle-school reading improvements */
+body { font-size: 16px; }
+.step-intro { font-size: 1.08rem; line-height: 1.65; max-width: 68ch; }
+.fact-card { margin-bottom: 12px; }
+.fact-card h2 { font-size: 1.04rem; color: #27466e; margin: 0 0 8px; }
+.fact-card li { line-height: 1.65; margin-bottom: 9px; max-width: 75ch; }
+.card p, .packet p { line-height: 1.65; }
+.card label { line-height: 1.45; }
+.card textarea { min-height: 110px; font-size: 16px; }
+.card .choice { padding: 12px 8px; border-radius: 6px; margin: 3px 0; }
+.card .choice:focus-within { outline: 2px solid #3157a5; }
+.card .choice input { flex-shrink: 0; margin-top: 4px; }
+.packet { background: #f8fafc; padding: 13px 18px; border-radius: 0 7px 7px 0; margin: 13px 0; }
+.packet h3 { margin-top: 3px; }
+#setup { max-width: 650px; margin: 48px auto; }
+#setup select { max-width: 360px; display: block; }
+#setup .actions { margin-top: 20px; }
+#sessionId.session-code { display: inline-block; font-size: 2rem; letter-spacing: 0.09em; font-weight: 800; padding: 10px 16px; background: #f1f5fb; border: 1px solid #b8c8df; border-radius: 10px; margin: 4px 0; }
+.classroom-head { max-width: unset; padding: 0; }
+.stage-current { display: flex; gap: 8px; flex-direction: column; padding: 12px; border: 1px solid #d0d5dd; border-radius: 8px; }
+.stage-current strong { font-size: 1.1rem; }
+.eyebrow { color: #536276; font-size: 0.77rem; letter-spacing: 0.08em; font-weight: 750; margin: 0 0 3px; }
+.error { color: #b42318; font-weight: 600; }
+details { margin-top: 18px; border-top: 1px solid #d0d5dd; padding-top: 14px; }
+details summary { cursor: pointer; font-weight: 650; }
+#joinLink { width: 100%; }
+#syncStatus { min-height: 24px; overflow-wrap: anywhere; }
+@media(max-width: 700px){.header-row.classroom-head{flex-direction:column;align-items:flex-start}.session-code{font-size:1.4rem!important}.mod-grid{grid-template-columns:1fr}.card{padding:16px}}
