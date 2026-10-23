@@ -4,27 +4,32 @@
     ".write": false,
     "sessions": {
       "$sessionId": {
+        "owner": {
+          ".read": "auth != null",
+          ".write": "auth != null && !data.exists() && newData.val() === auth.uid"
+        },
         "state": {
           ".read": "auth != null",
-          ".write": "auth != null"
+          ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid"
         },
         "published": {
           ".read": "auth != null",
-          ".write": "auth != null"
+          ".write": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid"
         },
         "presence": {
-          ".read": "auth != null",
+          ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
           "$uid": {
-            ".write": "auth != null && auth.uid == $uid"
+            ".write": "auth != null && auth.uid === $uid"
           }
         }
       }
     },
     "responses": {
       "$sessionId": {
-        ".read": "auth != null",
+        ".read": "auth != null && root.child('sessions').child($sessionId).child('owner').val() === auth.uid",
         "$uid": {
-          ".write": "auth != null && auth.uid == $uid"
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
         }
       }
     }

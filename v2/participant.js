@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getAuth, signInAnonymously, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, onValue, set, update, remove, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -16,13 +16,20 @@ let state = { currentTab: previewMode ? SCENARIO.tabs.length - 1 : 0, timerEnd:n
 let activeTab = 0; let timerInterval; let myResponses = {};
 if (previewMode) { activeTab = 0; myResponses = {}; sessionStorage.removeItem("sparkPreviewTab"); }
 let stateRef = null, responseBase = null;
+let serverOffset=0, publishedUnsub=null;
+const draftKey = id => "spark_draft_"+sessionId+"_"+uid+"_"+id;
+const getDraft = id => {try{return JSON.parse(sessionStorage.getItem(draftKey(id))||"null");}catch{return null;}};
+function discardDraft(id){try{sessionStorage.removeItem(draftKey(id));}catch{}}
+function storeDraftForStage(i){if(previewMode)return;const t=SCENARIO.tabs[i];if(!t||!document.querySelector("#form"))return;try{const data={};document.querySelectorAll("#form input,#form textarea").forEach(node=>{if(!node.id&&!node.name)return;const k=node.id||node.name;if(node.type==="radio"&&!node.checked)return;if(node.type==="checkbox"){if(!data[node.name])data[node.name]=[];if(node.checked)data[node.name].push(node.value);}else data[k]=node.value;});sessionStorage.setItem(draftKey(t.id),JSON.stringify(data));}catch{}}
+function storeDraft(){storeDraftForStage(activeTab);}
+function applyDraft(t){const data=getDraft(t.id);if(!data)return;const f=document.querySelector("#form");if(!f)return;f.querySelectorAll("input,textarea").forEach(node=>{const k=node.id||node.name;if(node.type==="radio")node.checked=data[node.name]===node.value;else if(node.type==="checkbox")node.checked=(data[node.name]||[]).includes(node.value);else if(data[k]!=null)node.value=data[k];});if($("#conf")&&$("#confVal"))$("#confVal").textContent=$("#conf").value;}
+
 
 if (!previewMode) {
  try {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   db = getDatabase(app);
-  await setPersistence(auth, browserSessionPersistence);
   const cred = await signInAnonymously(auth);
   uid = cred.user.uid;
   stateRef = ref(db, `sessions/${sessionId}/state`);
@@ -50,14 +57,20 @@ if (previewMode) {
   $("#status").textContent = "PREVIEW MODE";
   renderTabs(); render(); startTimer();
 } else if(db && stateRef) {
-  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; render(); }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
+  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
+  onValue(ref(db,".info/serverTimeOffset"), snap => {serverOffset=snap.val()||0;});
   onValue(stateRef, snap => {
     if(!snap.exists()) { $("#status").textContent="Session not found";return; }
     const nextState = { ...state, ...(snap.val() || {}) };
+    const previous=activeTab;
     if (nextState.currentTab > state.currentTab) activeTab = nextState.currentTab;
     if (activeTab > nextState.currentTab) activeTab = nextState.currentTab;
+    if(previous!==activeTab)storeDraftForStage(previous);
+    const changed=previous!==activeTab;
     state = nextState;
-    renderTabs(); render(); startTimer();
+    if(changed){renderTabs();render();}
+    const saveButton=document.querySelector("[data-save]");if(saveButton)saveButton.disabled=!!state.locked;
+    startTimer();
     $("#status").textContent = "Joined class "+sessionId+" · Group "+groupParam;
   }, e => { $("#status").textContent = "Cannot read classroom session ("+(e?.code||"connection error")+"). Check code or tell your teacher."; });
 }
@@ -82,6 +95,7 @@ $("#resetParticipant").addEventListener("click", async () => {
 
   try {
     await remove(ref(db, responseBase));
+    for(const t of SCENARIO.tabs)discardDraft(t.id);
     renderTabs();
     render();
     const n = document.querySelector("#status");
@@ -94,14 +108,14 @@ $("#resetParticipant").addEventListener("click", async () => {
 
 function renderTabs(){
   $("#tabs").innerHTML = SCENARIO.tabs.map((t,i)=>`<button class="tab ${i===activeTab?'active':''} ${i>state.currentTab?'locked':''}" data-i="${i}" ${i>state.currentTab?'disabled':''}>${t.label}</button>`).join("");
-  document.querySelectorAll('.tab:not(.locked)').forEach(b=>b.addEventListener('click',()=>{activeTab=Number(b.dataset.i); renderTabs(); render();}));
+  document.querySelectorAll('.tab:not(.locked)').forEach(b=>b.addEventListener('click',()=>{storeDraft();activeTab=Number(b.dataset.i); renderTabs(); render();}));
 }
 
 function startTimer(){
   clearInterval(timerInterval);
   if (previewMode) { $("#timer").textContent="PREVIEW"; return; }
   const draw=()=>{
-    let ms = state.timerPausedRemaining ?? (state.timerEnd ? state.timerEnd-Date.now() : null);
+    let ms = state.timerPausedRemaining ?? (state.timerEnd ? state.timerEnd-(Date.now()+serverOffset) : null);
     if(ms==null){ $("#timer").textContent="--:--"; return; }
     ms=Math.max(0,ms); const s=Math.ceil(ms/1000); $("#timer").textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
   }; draw(); timerInterval=setInterval(draw,500);
@@ -116,7 +130,7 @@ async function save(stage, payload){
     if(btn) btn.disabled=false;
     return;
   }
-  try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()}); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} }
+  try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()}); discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} }
   catch(e){ const n=document.querySelector('#saveMsg'); if(n){n.textContent='Not saved yet. Check connection and try again.';} }
   finally { if(btn) btn.disabled=false; }
 }
@@ -149,6 +163,9 @@ function render(){
  if(t.responseType==='final') html += `<form class="card" id="form"><h2>Your decision after considering the evidence</h2>${recOptions('rec')}<label>Why is this your choice now?</label><textarea id="finalReason"></textarea><label>What could happen or what could you learn that would make you reconsider?</label><textarea id="reopen"></textarea><label>What new information would NOT be enough to change your mind by itself?</label><textarea id="insufficient"></textarea><div class="actions"><button class="primary" data-save>Save final response</button><span id="saveMsg"></span></div></form>`;
  $("#app").innerHTML=html;
  hydrate(t);
+ applyDraft(t);
+ if(!previewMode){const f=document.querySelector("#form");if(f)f.addEventListener("input",storeDraft);}
+ const sb=document.querySelector("[data-save]");if(sb)sb.disabled=!!state.locked;
  const conf=$("#conf"); if(conf) conf.addEventListener('input',()=>$("#confVal").textContent=conf.value);
  const form=$("#form"); if(form) form.addEventListener('submit',async e=>{e.preventDefault(); if(state.locked){$("#saveMsg").textContent='Responses are currently locked.';return;} const payload=collect(t.responseType); if(payload.error){$("#saveMsg").textContent=payload.error;return;} await save(t.id,payload);});
  if(previewMode && t.responseType==='evidence-review'){
@@ -160,10 +177,11 @@ function render(){
      const hint=btn.querySelector('.packet-hint'); if(hint) hint.textContent=opening?'Hide information':'Click to reveal';
    }));
  }
+ if(publishedUnsub){publishedUnsub();publishedUnsub=null;}
  if(document.querySelector('#publishedSummary')) {
    const el=document.querySelector('#publishedSummary');
    if (previewMode) el.textContent='Live room summaries are not shown in preview mode.';
-   else onValue(ref(db,`sessions/${sessionId}/published/${t.id}`),snap=>{if(el) el.innerHTML=snap.exists()?renderPublished(snap.val()):'The moderator has not published a summary yet.';});
+   else publishedUnsub=onValue(ref(db,`sessions/${sessionId}/published/${t.id}`),snap=>{if(el.isConnected)el.innerHTML=snap.exists()?renderPublished(snap.val()):'The teacher has not shared a summary yet.';});
  }
 }
 

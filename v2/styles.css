@@ -71,3 +71,11 @@ details summary { cursor: pointer; font-weight: 650; }
 #joinLink { width: 100%; }
 #syncStatus { min-height: 24px; overflow-wrap: anywhere; }
 @media(max-width: 700px){.header-row.classroom-head{flex-direction:column;align-items:flex-start}.session-code{font-size:1.4rem!important}.mod-grid{grid-template-columns:1fr}.card{padding:16px}}
+
+.step-nav{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px}
+.step-chip{border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--text);padding:9px 12px;cursor:pointer}
+.step-chip.viewing{background:var(--accent2);border-color:var(--accent);font-weight:700}
+.step-chip.live:after{content:" •";color:var(--ok)}
+.step-chip.future{color:var(--muted)}.read-aloud{padding-left:24px;font-size:1.1rem;line-height:1.6}
+.read-aloud li{margin-bottom:12px}.big-timer{font-size:2rem}.timer-box{text-align:right}
+#setup strong{display:block;margin-top:10px;line-height:1.55}

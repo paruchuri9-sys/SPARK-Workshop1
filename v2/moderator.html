@@ -1,22 +1,23 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SPARK | Teacher Classroom</title><link rel="stylesheet" href="styles.css"></head>
 <body><header><div class="header-row"><div class="brand"><strong>SPARK · Teacher</strong><span>Data Center Decision Activity</span></div><span id="authStatus" class="muted">Setting up...</span></div></header>
-<main><section id="setup" class="card"><h1>Set up your class</h1><p class="muted">Create a separate session for each class. Each student keeps their own responses, even when everyone discusses as one group.</p>
+<main><section id="setup" class="card"><h1>Set up your class</h1><p class="muted">Create a separate session for each class. Each student keeps their own responses, even when everyone discusses as one group.<strong> Important: To manage this session later, reopen it in this same browser and keep the teacher link. If browser data is cleared or you use a different browser, you may lose control of the session. Contact the SPARK team rather than creating another session for students already working.</strong></p>
 <label for="groupCount">How will students work?</label><select id="groupCount"><option value="1">Whole class (one group)</option><option value="2">2 groups</option><option value="3">3 groups</option><option value="4">4 groups</option><option value="5">5 groups</option><option value="6">6 groups</option><option value="8">8 groups</option></select>
 <div class="actions"><button id="createSession" type="button" class="primary">Create classroom session</button></div><p id="setupError" role="alert" class="error"></p></section>
 <section id="classroom" hidden>
 <div class="card"><div class="header-row classroom-head"><div><p class="eyebrow">CLASSROOM SESSION</p><h1 id="sessionLabel">Session</h1><p class="muted">Share this code or link with your students. Keep this page open to guide the activity.</p></div><div><a id="newSessionLink" href="moderator.html">Start another class</a></div></div>
 <div class="grid"><div><label>Student code</label><p id="sessionId" class="session-code" aria-label="Student classroom code"></p><p id="groupDescription" class="muted"></p></div><div><label for="joinLink">Student join link</label><input id="joinLink" readonly><div class="actions"><button id="copyJoin" class="secondary" type="button">Copy student link</button><button id="openStudent" class="secondary" type="button">Open student view</button></div></div></div>
 <p id="copyStatus" class="saved" role="status"></p></div>
-<div class="mod-grid"><div class="card"><h2>Guide your class</h2><p>Students can return to earlier steps. New steps appear when you advance the class.</p>
-<p class="stage-current"><span class="muted">Current step</span><strong id="currentTabLabel">Connecting...</strong></p>
-<div class="actions"><button id="next" class="primary" type="button">Open next step for students →</button></div>
-<p class="muted" id="nextHint"></p>
-<details><summary>Optional: Timer and response controls</summary><h3>Timer</h3><div id="timer" class="timer">--:--</div><div class="actions"><button id="startTimer" class="secondary" type="button">Start suggested timer</button><button id="pauseTimer" class="secondary" type="button">Pause timer</button><button id="addMinute" class="secondary" type="button">Add 1 minute</button><button id="resetTimer" class="secondary" type="button">Clear timer</button></div>
+<div class="card"><div class="header-row classroom-head"><div><p class="eyebrow">STUDENTS ARE ON</p><strong id="liveLabel">Connecting...</strong></div><div class="timer-box"><div id="timer" class="timer big-timer">--:--</div><div id="timerNote" class="muted"></div></div></div>
+<details><summary>Optional timer and response controls</summary><div class="actions"><button id="startTimer" class="secondary" type="button">Start or resume timer</button><button id="pauseTimer" class="secondary" type="button">Pause</button><button id="addMinute" class="secondary" type="button">+1 min</button><button id="resetTimer" class="secondary" type="button">Clear</button></div>
 <label class="choice"><input id="lockResponses" type="checkbox"> Stop students from editing answers</label></details>
-</div><div class="card"><h2>Student activity</h2><p><strong id="presence">...</strong> connected now</p><p><strong id="responseCount">...</strong> students with saved records</p>
-<p id="syncStatus" role="status" class="muted">Checking connection...</p>
-<button id="refreshSummary" type="button" class="secondary">View answer summary</button><div id="summary"></div>
-<details><summary>Optional: Share summary with students</summary><p class="muted">Only share when discussion is appropriate; earlier summaries can influence independent answers.</p><button id="publishSummary" class="secondary" type="button">Show summary to class</button></details></div></div>
-<div class="card"><h2>Teaching tips for this step</h2><div id="facilitation"></div></div></section>
+<p id="syncStatus" role="status" class="muted">Checking connection...</p></div>
+<div class="card"><nav id="stepNav" class="step-nav" aria-label="Classroom activity steps"></nav>
+<div class="header-row classroom-head"><div><p class="eyebrow" id="viewState">VIEWING</p><h2 id="viewTitle"></h2></div><div class="actions"><button id="prevView" class="secondary" type="button">← Previous</button><button id="nextView" class="secondary" type="button">Next →</button></div></div>
+<h3>Say to the class</h3><ul id="readAloud" class="read-aloud"></ul><h3>Facilitation note</h3><p id="modNote"></p><p class="muted" id="viewMeta"></p>
+<div class="actions"><button id="openStep" class="primary" type="button">Open this step for students</button></div></div>
+<div class="card"><h2>Student activity</h2><p><strong id="presence">...</strong> connected now · <strong id="responseCount">...</strong> with saved records</p>
+<div class="actions"><button id="refreshSummary" class="secondary" type="button">View answer summary for this step</button></div><div id="summary"></div>
+<details><summary>Optional: Share summary with students</summary><p class="muted">Only share after students have recorded their independent answers.</p><button id="publishSummary" class="secondary" type="button" disabled>Show summary to class</button></details></div>
+</section>
 <script type="module" src="moderator.js"></script></main></body></html>

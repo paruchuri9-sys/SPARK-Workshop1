@@ -1,80 +1,135 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, onValue, get, update, set } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getDatabase, ref, get, onValue, update, set } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { SCENARIO } from "./scenario-classroom.js";
 
-const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getDatabase(app); const $=s=>document.querySelector(s);
-let sessionId='', state={currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false}, focusTab=0, timerInterval, latestSummary=null;
-const notes=[
-  "Capture the unaided individual first impression before group discussion. Do not reward any recommendation direction.",
-  "Let participants distinguish what is known from what needs to be known. Ask why a missing fact could matter.",
-  "The restriction to two areas is deliberate: it forces prioritization. Ask why those two were chosen.",
-  "Do not resolve every uncertainty. Ask which packet answered a question, which complicated it, and which was less useful than expected.",
-  "Ask groups to connect specific evidence to the recommendation and name important uncertainty that remains.",
-  "Do not imply that the new information should cause revision. Ask what changed, what did not, and why.",
-  "Focus on reopening conditions: what future evidence would warrant reconsideration, and what would be insufficient by itself?"
-];
+const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getDatabase(app);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const steps = SCENARIO.tabs;
+let sessionId = "", isOwner = false, serverOffset = 0, state = {currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false};
+let viewTab = null, summary = null, summaryRequest = 0, timerInterval, unsubs = [];
+const now = () => Date.now()+serverOffset;
+const requested = (new URLSearchParams(location.search).get("session")||"").toUpperCase().replace(/[^A-F0-9]/g,"");
+const showError = m => {$("#setupError").textContent=m;$("#authStatus").textContent="Action needed";};
+const connect = async () => {if(!auth.currentUser)await signInAnonymously(auth);};
 
-
-const params=new URLSearchParams(location.search);
-const remembered=(params.get('session')||'').toUpperCase().replace(/[^A-F0-9]/g,'');
-const showError=message=>{ $('#setupError').textContent=message; $('#authStatus').textContent='Action needed'; };
-async function connectTeacher(){ if(!auth.currentUser) await signInAnonymously(auth); }
-async function openSession(code){
-  await connectTeacher();
-  const snap=await get(ref(db,`sessions/${code}/state`));
-  if(!snap.exists()) throw Error('Session not found. Create a new one.');
-  sessionId=code;
-  $('#setup').hidden=true; $('#classroom').hidden=false;
-  $('#sessionId').textContent=code;
-  $('#sessionLabel').textContent='Ready for students';
-  $('#groupDescription').textContent=Number(snap.val().groupCount||1)===1?'Whole class, with individual responses':snap.val().groupCount+' groups, each student has an individual response';
-  $('#joinLink').value=new URL('join.html?session='+encodeURIComponent(code),location.href).href;
-  $('#authStatus').textContent='Class session '+code;
-  bindSession();
-}
-$('#createSession').addEventListener('click',async()=>{
- const button=$('#createSession');button.disabled=true;$('#setupError').textContent='';
+$("#createSession").addEventListener("click",async()=>{
+ const btn=$("#createSession");btn.disabled=true;$("#setupError").textContent="";
  try{
-  await connectTeacher();
-  let code,exists=true;
-  for(let i=0;i<8&&exists;i++){const bytes=new Uint8Array(5);crypto.getRandomValues(bytes);code=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();exists=(await get(ref(db,`sessions/${code}/state`))).exists();}
-  if(exists)throw Error('Could not create a unique session. Try again.');
-  await set(ref(db,`sessions/${code}/state`),{currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false,groupCount:Number($('#groupCount').value),createdAt:Date.now()});
-  location.assign('moderator.html?session='+encodeURIComponent(code));
- }catch(e){showError('Could not create a classroom session: '+e.message);button.disabled=false;}
+   await connect();let code,exists=true;
+   for(let i=0;i<8&&exists;i++){const bytes=new Uint8Array(5);crypto.getRandomValues(bytes);code=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("").toUpperCase();exists=(await get(ref(db,"sessions/"+code+"/owner"))).exists();}
+   if(exists)throw Error("Unable to find an unused code.");
+   await set(ref(db,"sessions/"+code+"/owner"),auth.currentUser.uid);
+   await set(ref(db,"sessions/"+code+"/state"),{currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false,groupCount:Number($("#groupCount").value),createdAt:Date.now()});
+   location.assign("moderator.html?session="+encodeURIComponent(code));
+ }catch(e){showError("Could not create a class: "+(e.code||e.message)+". If it partially succeeded, contact the SPARK team.");btn.disabled=false;}
 });
-$('#copyJoin').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('#joinLink').value);$('#copyStatus').textContent='Student link copied.';}catch(e){$('#joinLink').select();$('#copyStatus').textContent='Select and copy the link above.';}});
-$('#openStudent').addEventListener('click',()=>window.open($('#joinLink').value,'_blank','noopener'));
-if(remembered)openSession(remembered).catch(e=>{showError(e.message);$('#setup').hidden=false;$('#classroom').hidden=true;});
-else $('#authStatus').textContent='Create a class to begin';
+async function openSession(code){
+ await connect();
+ const [st,owner]=await Promise.all([get(ref(db,"sessions/"+code+"/state")),get(ref(db,"sessions/"+code+"/owner"))]);
+ if(!st.exists())throw Error("Session unavailable. Open your original teacher link or create a new session.");
+ sessionId=code;isOwner=owner.val()===auth.currentUser.uid;
+ $("#setup").hidden=true;$("#classroom").hidden=false;$("#sessionId").textContent=code;
+ $("#sessionLabel").textContent=isOwner?"Classroom ready":"View only";
+ $("#groupDescription").textContent=Number(st.val().groupCount||1)===1?"One whole-class group, individual responses":st.val().groupCount+" groups, individual responses";
+ $("#joinLink").value=new URL("join.html?session="+encodeURIComponent(code),location.href).href;
+ $("#authStatus").textContent="Class "+code;
+ if(!isOwner){
+   $("#syncStatus").textContent="Teacher controls unavailable in this browser. Return to the browser that created this session, or contact the SPARK team.";
+   document.querySelectorAll("#startTimer,#pauseTimer,#addMinute,#resetTimer,#lockResponses,#openStep,#publishSummary,#refreshSummary").forEach(x=>x.disabled=true);
+ }
+ bind();
+}
+$("#copyJoin").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#joinLink").value);$("#copyStatus").textContent="Student link copied.";}catch{$("#joinLink").select();$("#copyStatus").textContent="Select and copy the link above."; }});
+$("#openStudent").addEventListener("click",()=>window.open($("#joinLink").value,"_blank","noopener"));
+if(requested)openSession(requested).catch(e=>{showError(e.message);$("#setup").hidden=false;$("#classroom").hidden=true;});
+else $("#authStatus").textContent="Create a class to begin";
 
-let unsubs=[];
-function bindSession(){
- unsubs.forEach(fn=>fn());unsubs=[];
- const fail=(name,e)=>{$('#syncStatus').textContent='Cannot read '+name+'. Check Firebase rules and connection ('+(e?.code||'unknown error')+').';};
- const sref=ref(db,`sessions/${sessionId}/state`);
- unsubs.push(onValue(sref,snap=>{if(!snap.exists()){fail('session state');return;}state={currentTab:0,...snap.val()};focusTab=state.currentTab;render();$('#syncStatus').textContent='Teacher connected to session '+sessionId;},e=>fail('session state',e)));
- unsubs.push(onValue(ref(db,`sessions/${sessionId}/presence`),snap=>{$('#presence').textContent=Object.keys(snap.val()||{}).length;},e=>fail('students online',e)));
- unsubs.push(onValue(ref(db,`responses/${sessionId}`),snap=>{$('#responseCount').textContent=Object.keys(snap.val()||{}).length;},e=>fail('student answers',e)));
+function clearSummary(){
+ summaryRequest++;summary=null;$("#summary").textContent="";$("#publishSummary").disabled=true;
 }
-function render(){
- const t=SCENARIO.tabs[focusTab]||SCENARIO.tabs[0];
- $('#currentTabLabel').textContent=t.label+' · '+t.title;
- $('#facilitation').innerHTML='<h3>'+t.title+'</h3><p>'+notes[focusTab]+'</p>';
- $('#lockResponses').checked=!!state.locked;startTimer();
- $('#next').disabled=state.currentTab>=SCENARIO.tabs.length-1;
- $('#nextHint').textContent=$('#next').disabled?'All steps are available. Students can revisit earlier steps.':'Next: '+SCENARIO.tabs[state.currentTab+1].title;
+function bind(){
+ unsubs.forEach(x=>x());unsubs=[];
+ const fail=(where,e)=>{$("#syncStatus").textContent="Cannot read "+where+" ("+(e?.code||"connection error")+").";};
+ unsubs.push(onValue(ref(db,".info/serverTimeOffset"),s=>{serverOffset=s.val()||0;}));
+ unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/state"),s=>{
+   if(!s.exists()){fail("class state");return;}
+   state={currentTab:0,...s.val()};
+   if(viewTab===null)viewTab=state.currentTab;
+   renderLive();renderView();
+   if(isOwner)$("#syncStatus").textContent="Connected to class "+sessionId;
+ },e=>fail("class state",e)));
+ if(isOwner){
+  unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/presence"),s=>{$("#presence").textContent=Object.keys(s.val()||{}).length;},e=>fail("students online",e)));
+  unsubs.push(onValue(ref(db,"responses/"+sessionId),s=>{$("#responseCount").textContent=Object.keys(s.val()||{}).length;},e=>fail("saved records",e)));
+ }
 }
-async function patch(p){if(!sessionId)throw Error('Create a session first');try{await update(ref(db,`sessions/${sessionId}/state`),p);}catch(e){$('#syncStatus').textContent='Update failed: '+e.message;}}
-$('#next').addEventListener('click',async()=>{if(state.currentTab>=SCENARIO.tabs.length-1)return;await patch({currentTab:state.currentTab+1,locked:false,timerEnd:null,timerPausedRemaining:null});});
-$('#lockResponses').addEventListener('change',e=>patch({locked:e.target.checked}));
-$('#startTimer').addEventListener('click',()=>{const min=SCENARIO.tabs[focusTab].minutes||5;patch({timerEnd:Date.now()+min*60000,timerPausedRemaining:null});});
-$('#pauseTimer').addEventListener('click',()=>{const remain=state.timerEnd?Math.max(0,state.timerEnd-Date.now()):(state.timerPausedRemaining||0);patch({timerEnd:null,timerPausedRemaining:remain});});
-$('#addMinute').addEventListener('click',()=>{if(state.timerEnd)patch({timerEnd:state.timerEnd+60000});else patch({timerPausedRemaining:(state.timerPausedRemaining||0)+60000});});
-$('#resetTimer').addEventListener('click',()=>patch({timerEnd:null,timerPausedRemaining:null}));
-function startTimer(){clearInterval(timerInterval);const draw=()=>{let ms=state.timerPausedRemaining??(state.timerEnd?state.timerEnd-Date.now():null);if(ms==null){$('#timer').textContent='--:--';return;}ms=Math.max(0,ms);let s=Math.ceil(ms/1000);$('#timer').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};draw();timerInterval=setInterval(draw,500);}
-$('#refreshSummary').addEventListener('click',computeSummary);
-$('#publishSummary').addEventListener('click',async()=>{if(!latestSummary)await computeSummary();const t=SCENARIO.tabs[focusTab];await set(ref(db,`sessions/${sessionId}/published/${t.id}`),latestSummary);});
-async function computeSummary(){const snap=await get(ref(db,`responses/${sessionId}`)),rows=Object.values(snap.val()||{}),t=SCENARIO.tabs[focusTab],items={};if(t.id==='first-impression'||t.id==='preliminary'||t.id==='new-information'||t.id==='final'){rows.forEach(r=>{const v=r[t.id]?.recommendation;if(v)items[v]=(items[v]||0)+1;});}else if(t.id==='investigate'){rows.forEach(r=>(r[t.id]?.areas||[]).forEach(v=>items[v]=(items[v]||0)+1));}else if(t.id==='need-to-know'){latestSummary={text:`${rows.filter(r=>r[t.id]?.questions?.length).length} participants submitted unanswered questions. Open-ended questions should be discussed or manually categorized before publishing.`};$('#summary').textContent=latestSummary.text;return latestSummary;}else{latestSummary={text:`${rows.filter(r=>r[t.id]).length} participants submitted notes for this stage.`};$('#summary').textContent=latestSummary.text;return latestSummary;}latestSummary={items};$('#summary').innerHTML=Object.entries(items).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div>${k}: <strong>${v}</strong></div>`).join('')||'<span class="muted">No responses yet.</span>';return latestSummary;}
+function remaining(){return state.timerPausedRemaining!=null?state.timerPausedRemaining:(state.timerEnd?state.timerEnd-now():null);}
+function renderLive(){
+ $("#liveLabel").textContent=steps[state.currentTab]?.label||"Unknown step";
+ $("#lockResponses").checked=!!state.locked;
+ clearInterval(timerInterval);
+ const draw=()=>{let ms=remaining();if(ms==null){$("#timer").textContent="--:--";$("#timerNote").textContent="";return;}let secs=Math.ceil(Math.max(0,ms)/1000);$("#timer").textContent=Math.floor(secs/60)+":"+String(secs%60).padStart(2,"0");$("#timerNote").textContent=state.timerPausedRemaining!=null?"Paused":ms<=0?"Time is up":"Running";};
+ draw();timerInterval=setInterval(draw,500);
+}
+async function patch(next){if(!isOwner||!sessionId)return false;try{await update(ref(db,"sessions/"+sessionId+"/state"),next);return true;}catch(e){$("#syncStatus").textContent="Could not update class: "+(e.code||e.message);return false;}}
+$("#startTimer").addEventListener("click",()=>{
+ if(state.timerPausedRemaining!=null)return patch({timerEnd:now()+state.timerPausedRemaining,timerPausedRemaining:null});
+ if(state.timerEnd&&state.timerEnd>now())return;
+ return patch({timerEnd:now()+(steps[state.currentTab].minutes||5)*60000,timerPausedRemaining:null});
+});
+$("#pauseTimer").addEventListener("click",()=>{if(state.timerEnd)patch({timerEnd:null,timerPausedRemaining:Math.max(0,state.timerEnd-now())});});
+$("#addMinute").addEventListener("click",()=>{if(state.timerEnd)patch({timerEnd:state.timerEnd+60000});else if(state.timerPausedRemaining!=null)patch({timerPausedRemaining:state.timerPausedRemaining+60000});else patch({timerEnd:now()+60000,timerPausedRemaining:null});});
+$("#resetTimer").addEventListener("click",()=>patch({timerEnd:null,timerPausedRemaining:null}));
+$("#lockResponses").addEventListener("change",e=>patch({locked:e.target.checked}));
+
+function setView(i){viewTab=Math.max(0,Math.min(steps.length-1,i));clearSummary();renderView();}
+function renderView(){
+ if(viewTab===null)return;
+ const t=steps[viewTab],live=state.currentTab;
+ $("#stepNav").innerHTML=steps.map((s,i)=>'<button type="button" data-step="'+i+'" class="step-chip '+(i===viewTab?"viewing ":"")+(i===live?"live ":"")+(i>live?"future":"")+'">'+esc(s.label)+'</button>').join("");
+ $("#stepNav").querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>setView(Number(b.dataset.step))));
+ $("#viewState").textContent=viewTab===live?"STUDENTS ARE HERE NOW":viewTab<live?"STUDENTS HAVE ALREADY SEEN THIS":"NOT YET OPEN TO STUDENTS";
+ $("#viewTitle").textContent=t.title;
+ $("#readAloud").innerHTML=(t.readAloud||[]).map(x=>"<li>"+esc(x)+"</li>").join("");
+ $("#modNote").textContent=t.modNote||"";
+ $("#viewMeta").textContent="Suggested time: "+(t.minutes||5)+" min";
+ $("#prevView").disabled=viewTab===0;$("#nextView").disabled=viewTab===steps.length-1;
+ $("#openStep").textContent=viewTab===live?"Students are on this step":viewTab<live?"Students already have this step":"Open this step for students";
+ $("#openStep").disabled=!isOwner||viewTab<=live;
+}
+$("#prevView").addEventListener("click",()=>setView(viewTab-1));
+$("#nextView").addEventListener("click",()=>setView(viewTab+1));
+$("#openStep").addEventListener("click",async()=>{
+ if(!isOwner||viewTab<=state.currentTab)return;
+ if(viewTab>state.currentTab+1&&!confirm("This will skip "+(viewTab-state.currentTab-1)+" step(s) and expose later information to students. Continue?"))return;
+ await patch({currentTab:viewTab,locked:false,timerEnd:null,timerPausedRemaining:null});
+});
+async function computeSummary(){
+ if(!isOwner)return null;
+ const token=++summaryRequest,step=steps[viewTab].id,code=sessionId;
+ $("#publishSummary").disabled=true;$("#summary").textContent="Loading answers...";
+ try{
+ const snap=await get(ref(db,"responses/"+code));
+ if(token!==summaryRequest||steps[viewTab].id!==step||sessionId!==code)return null;
+ const rows=Object.values(snap.val()||{}),items={};
+ if(["first-impression","preliminary","new-information","final"].includes(step))
+   rows.forEach(r=>{const x=r[step]?.recommendation;if(x)items[x]=(items[x]||0)+1;});
+ else if(step==="investigate")
+   rows.forEach(r=>(r[step]?.areas||[]).forEach(x=>{items[x]=(items[x]||0)+1;}));
+ const text=step==="need-to-know"?rows.filter(r=>r[step]?.questions?.length).length+" students submitted questions.":
+   step!=="investigate"&&!["first-impression","preliminary","new-information","final"].includes(step)?rows.filter(r=>r[step]).length+" students submitted notes.":null;
+ summary={step,session:code,payload:text?{text}:{items}};
+ $("#summary").innerHTML=text?esc(text):Object.entries(items).sort((a,b)=>b[1]-a[1]).map(([k,v])=>"<div>"+esc(k)+": <strong>"+v+"</strong></div>").join("")||"No responses yet.";
+ $("#publishSummary").disabled=false;return summary;
+ }catch(e){if(token===summaryRequest)$("#summary").textContent="Cannot load summary: "+(e.code||e.message);return null;}
+}
+$("#refreshSummary").addEventListener("click",computeSummary);
+$("#publishSummary").addEventListener("click",async()=>{
+ if(!isOwner||!summary||summary.step!==steps[viewTab].id||summary.session!==sessionId){$("#summary").textContent="Refresh this step's summary before sharing.";return;}
+ const picked=summary;
+ try{await set(ref(db,"sessions/"+picked.session+"/published/"+picked.step),picked.payload);$("#summary").insertAdjacentText("beforeend"," Shared with class.");}
+ catch(e){$("#summary").textContent="Cannot share summary: "+(e.code||e.message);}
+});
