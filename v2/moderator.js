@@ -238,14 +238,14 @@ $("#exportResponses").addEventListener("click",async()=>{
    "new-information":["recommendation","confidence","why"],
    "final":["recommendation","finalReason","reopen","insufficient"]
   };
-  const fieldNames=stages.flatMap(stage=>[...fields[stage].map(f=>stage+"."+f),stage+".updatedAt"]);
-  const columns=["participant_key","nickname","group",...fieldNames];
-  const rows=Object.entries(data).map(([key,r])=>[key,r?.participant?.nickname||"",r?.participant?.group||"",
-    ...stages.flatMap(stage=>[...fields[stage].map(f=>r?.[stage]?.[f]??""),r?.[stage]?.updatedAt??""])
+  const fieldNames=stages.flatMap(stage=>[...fields[stage].map(f=>stage+"."+f),stage+".saved"]);
+  const columns=["anonymous_row",...fieldNames];
+  const rows=Object.entries(data).sort(([a],[b])=>a.localeCompare(b)).map(([key,r],i)=>["R"+String(i+1).padStart(3,"0"),
+    ...stages.flatMap(stage=>[...fields[stage].map(f=>r?.[stage]?.[f]??""),r?.[stage]?.updatedAt?"yes":""])
   ]);
   downloadCsv("spark-"+sessionId+"-scenario-responses.csv",columns,rows);
   downloadState.responses=JSON.stringify(data);refreshPurgeEnabled();
-  $("#exportStatus").textContent=rows.length+" participant records exported. Keep this file in approved secure storage.";
+  $("#exportStatus").textContent=rows.length+" records downloaded without Firebase IDs, nicknames or exact save times. Open the file and check free text for identifying details.";
  }catch(e){$("#exportStatus").textContent="Export failed: "+(e?.code||e?.message||"unknown error");}
  finally{button.disabled=false;}
 });
