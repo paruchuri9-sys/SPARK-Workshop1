@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Join SPARK Classroom</title><link rel="stylesheet" href="styles.css"><style>.join-card{max-width:620px;margin:40px auto}input,select{width:100%;padding:12px;border:1px solid #d0d5dd;border-radius:8px;font:inherit}.error{color:#b42318}.muted{line-height:1.5}</style></head>
+<body><header><div class="header-row"><div class="brand"><strong>SPARK</strong><span>Join classroom activity</span></div></div></header>
+<main class="join-card"><div class="card"><h1>Join your class</h1><p class="muted">Use the session code from your teacher. Do not enter your name or other identifying information in your answers.</p>
+<form id="joinForm"><label for="session">Classroom code</label><input id="session" maxlength="10" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Teacher-provided code">
+<label for="group">Your group</label><select id="group"><option value="1">Whole class (Group 1)</option></select>
+<p id="note" class="muted">If your teacher has not assigned groups, stay in Group 1.</p>
+<div class="actions"><button id="join" type="submit" class="primary">Join activity</button></div><p id="error" role="alert" class="error"></p></form>
+</div></main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+import {getAuth,signInAnonymously} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import {getDatabase,ref,get} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import {firebaseConfig} from "./firebase-config.js";
+const app=initializeApp(firebaseConfig), db=getDatabase(app),auth=getAuth(app);
+const $=id=>document.getElementById(id), query=new URLSearchParams(location.search);
+let groupCount=0,validatedCode="";
+$('session').value=(query.get('session')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+async function verify(){
+  const code=$('session').value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  $('error').textContent='';$('join').disabled=true;groupCount=0;validatedCode='';
+  if(!/^[A-F0-9]{10}$/.test(code)){$('error').textContent='Enter the 10-character classroom code.';$('join').disabled=false;return;}
+  try{
+    if(!auth.currentUser)await signInAnonymously(auth);
+    const snap=await get(ref(db,'sessions/'+code+'/state'));
+    if(!snap.exists() || !Number.isInteger(Number(snap.val().groupCount)) || Number(snap.val().groupCount)<1 || Number(snap.val().groupCount)>8)throw new Error('This classroom code is not active.');
+    groupCount=Number(snap.val().groupCount);validatedCode=code;
+    $('group').innerHTML=Array.from({length:groupCount},(_,i)=>'<option value="'+(i+1)+'">'+(groupCount===1?'Whole class':'Group '+(i+1))+'</option>').join('');
+    $('note').textContent=groupCount===1?'Your class is participating as one group.':'Choose the group assigned by your teacher.';
+  }catch(e){$('error').textContent='Unable to join. Check your code or ask your teacher.';}
+  finally{$('join').disabled=false;}
+}
+$('session').addEventListener('change',verify);
+$('joinForm').addEventListener('submit',async e=>{e.preventDefault();if($('session').value.toUpperCase()!==validatedCode)await verify();if(!validatedCode)return;location.href='participant.html?session='+encodeURIComponent(validatedCode)+'&group='+encodeURIComponent($('group').value);});
+if($('session').value)verify();
+</script></body></html>
