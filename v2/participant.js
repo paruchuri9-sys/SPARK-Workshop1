@@ -177,7 +177,14 @@ $("#resetParticipant").addEventListener("click", async () => {
   }
 
   try {
+    // Wait for outstanding autosaves before removing responses, so a late write
+    // cannot recreate a record after the student has reset it.
+    for(const t of stageDraftTimers.values())clearTimeout(t);
+    stageDraftTimers.clear();
+    await Promise.all([...stageWriteQueues.values()].map(p=>p.catch(()=>{})));
     await remove(ref(db, responseBase));
+    stageDraftFingerprints.clear();
+    stageDraftErrors.clear();
     for(const t of SCENARIO.tabs)discardDraft(t.id);
     renderTabs();
     render();
