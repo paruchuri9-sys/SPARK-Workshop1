@@ -19,7 +19,82 @@ let stateRef = null, responseBase = null;
 let serverOffset=0, publishedUnsub=null;
 let exitStatus="not_started";
 const exitKey="spark_exit_completed_"+sessionId;
+const isStageSubmitted = r => !!r&&(r.status==="submitted"||(!r.status&&!!r.updatedAt));
 const draftKey = id => "spark_draft_"+sessionId+"_"+uid+"_"+id;
+const stageWriteQueues = new Map();
+const stageDraftTimers = new Map();
+const stageDraftErrors = new Map();
+const stageDraftFingerprints = new Map();
+const AUTO_SAVE_DELAY_MS=900;
+function updateSaveMessage(label,stage){
+ if(SCENARIO.tabs[activeTab]?.id!==stage)return;
+ const node=document.querySelector("#saveMsg");
+ if(node)node.textContent=label;
+}
+function queueStageWrite(stage,work){
+ const prior=stageWriteQueues.get(stage)||Promise.resolve();
+ const next=prior.catch(()=>{}).then(work);
+ stageWriteQueues.set(stage,next);
+ return next;
+}
+function draftPayload(type){
+ const checked=n=>document.querySelector('input[name="'+n+'"]:checked')?.value||"";
+ const val=id=>document.getElementById(id)?.value?.trim()||"";
+ if(type==="initial")return {recommendation:checked("rec"),confidence:Number(val("conf")||50),factors:val("factors")};
+ if(type==="questions")return {questions:[1,2,3].map(i=>val("q"+i)).filter(Boolean),sources:val("sources")};
+ if(type==="investigation")return {areas:[...document.querySelectorAll('input[name="area"]:checked')].map(n=>n.value),why:val("why"),hope:val("hope")};
+ if(type==="evidence-review")return {review:val("review")};
+ if(type==="recommendation")return {recommendation:checked("rec"),evidence:val("evidence"),reasoning:val("reasoning"),confidence:Number(val("conf")||50)};
+ if(type==="update")return {recommendation:checked("rec"),confidence:Number(val("conf")||50),why:val("why")};
+ if(type==="final")return {recommendation:checked("rec"),finalReason:val("finalReason"),reopen:val("reopen"),insufficient:val("insufficient")};
+ return {};
+}
+function hasMeaningfulDraft(t,p){
+ if(!p)return false;
+ if(t.responseType==="initial")return !!(p.recommendation||p.factors);
+ if(t.responseType==="questions")return !!(p.questions?.length||p.sources);
+ if(t.responseType==="investigation")return !!(p.areas?.length||p.why||p.hope);
+ if(t.responseType==="evidence-review")return !!p.review;
+ if(t.responseType==="recommendation")return !!(p.recommendation||p.evidence||p.reasoning);
+ if(t.responseType==="update")return !!(p.recommendation||p.why);
+ if(t.responseType==="final")return !!(p.recommendation||p.finalReason||p.reopen||p.insufficient);
+ return false;
+}
+function scheduleDraftSave(stage){
+ if(previewMode||!db||!responseBase||state.locked||state.archived)return;
+ clearTimeout(stageDraftTimers.get(stage));
+ updateSaveMessage("Saving draft soon...",stage);
+ stageDraftTimers.set(stage,setTimeout(()=>flushStageDraft(stage),AUTO_SAVE_DELAY_MS));
+}
+function flushStageDraft(stage){
+ clearTimeout(stageDraftTimers.get(stage));stageDraftTimers.delete(stage);
+ if(previewMode||!db||state.locked||state.archived)return Promise.resolve(false);
+ const t=SCENARIO.tabs.find(x=>x.id===stage);
+ if(!t||SCENARIO.tabs[activeTab]?.id!==stage)return Promise.resolve(false);
+ storeDraftForStage(activeTab);
+ const payload=draftPayload(t.responseType);
+ if(!hasMeaningfulDraft(t,payload))return Promise.resolve(false);
+ const fingerprint=JSON.stringify(payload);
+ if(stageDraftFingerprints.get(stage)===fingerprint)return stageWriteQueues.get(stage)||Promise.resolve(true);
+ stageDraftFingerprints.set(stage,fingerprint);
+ updateSaveMessage("Saving draft...",stage);
+ return queueStageWrite(stage,async()=>{
+  if(state.archived||state.locked)return false;
+  try{
+   await update(ref(db,responseBase+"/"+stage),{...payload,status:"draft",autosavedAt:serverTimestamp()});
+   stageDraftErrors.delete(stage);
+   // Keep the local draft until an explicit submit confirms the response.
+   updateSaveMessage("Draft saved automatically · click Save to submit",stage);
+   return true;
+  }catch(e){
+   stageDraftFingerprints.delete(stage);
+   stageDraftErrors.set(stage,e?.code||e?.message||"unknown");
+   updateSaveMessage("Draft not saved online · retry Save",stage);
+   console.error("SPARK autosave failed",{stage,code:e?.code,message:e?.message});
+   return false;
+  }
+ });
+}
 const getDraft = id => {try{return JSON.parse(sessionStorage.getItem(draftKey(id))||"null");}catch{return null;}};
 function discardDraft(id){try{sessionStorage.removeItem(draftKey(id));}catch{}}
 function storeDraftForStage(i){if(previewMode)return;const t=SCENARIO.tabs[i];if(!t||!document.querySelector("#form"))return;try{const data={};document.querySelectorAll("#form input,#form textarea").forEach(node=>{if(!node.id&&!node.name)return;const k=node.id||node.name;if(node.type==="radio"&&!node.checked)return;if(node.type==="checkbox"){if(!data[node.name])data[node.name]=[];if(node.checked)data[node.name].push(node.value);}else data[k]=node.value;});sessionStorage.setItem(draftKey(t.id),JSON.stringify(data));}catch{}}
@@ -59,16 +134,21 @@ if (previewMode) {
   $("#status").textContent = "PREVIEW MODE";
   renderTabs(); render(); startTimer();
 } else if(db && stateRef) {
-  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); else if(SCENARIO.tabs[activeTab]?.id==="final" && myResponses.final?.updatedAt && !document.querySelector("#exitTicketForm") && exitStatus!=="submitted" && exitStatus!=="skipped"){storeDraft();render();} }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
+  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); else if(SCENARIO.tabs[activeTab]?.id==="final" && isStageSubmitted(myResponses.final) && !document.querySelector("#exitTicketForm") && exitStatus!=="submitted" && exitStatus!=="skipped"){storeDraft();render();} }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
   onValue(ref(db,".info/serverTimeOffset"), snap => {serverOffset=snap.val()||0;});
   onValue(stateRef, snap => {
     if(snap.val()?.archived){ $("#status").textContent="This class is finished and submissions are closed.";return; }
     if(!snap.exists()) { $("#status").textContent="Session not found";return; }
     const nextState = { ...state, ...(snap.val() || {}) };
     const previous=activeTab;
-    if (nextState.currentTab > state.currentTab) activeTab = nextState.currentTab;
-    if (activeTab > nextState.currentTab) activeTab = nextState.currentTab;
-    if(previous!==activeTab)storeDraftForStage(previous);
+    const incomingTab=nextState.currentTab>state.currentTab?nextState.currentTab:
+      activeTab>nextState.currentTab?nextState.currentTab:activeTab;
+    if(previous!==incomingTab){
+      // Capture form while it is still on screen, before switching to the new stage.
+      flushStageDraft(SCENARIO.tabs[previous].id);
+      storeDraftForStage(previous);
+    }
+    activeTab=incomingTab;
     const changed=previous!==activeTab;
     state = nextState;
     if(changed){renderTabs();render();}
@@ -97,7 +177,14 @@ $("#resetParticipant").addEventListener("click", async () => {
   }
 
   try {
+    // Wait for outstanding autosaves before removing responses, so a late write
+    // cannot recreate a record after the student has reset it.
+    for(const t of stageDraftTimers.values())clearTimeout(t);
+    stageDraftTimers.clear();
+    await Promise.all([...stageWriteQueues.values()].map(p=>p.catch(()=>{})));
     await remove(ref(db, responseBase));
+    stageDraftFingerprints.clear();
+    stageDraftErrors.clear();
     for(const t of SCENARIO.tabs)discardDraft(t.id);
     renderTabs();
     render();
@@ -111,7 +198,7 @@ $("#resetParticipant").addEventListener("click", async () => {
 
 function renderTabs(){
   $("#tabs").innerHTML = SCENARIO.tabs.map((t,i)=>`<button class="tab ${i===activeTab?'active':''} ${i>state.currentTab?'locked':''}" data-i="${i}" ${i>state.currentTab?'disabled':''}>${t.label}</button>`).join("");
-  document.querySelectorAll('.tab:not(.locked)').forEach(b=>b.addEventListener('click',()=>{storeDraft();activeTab=Number(b.dataset.i); renderTabs(); render();}));
+  document.querySelectorAll('.tab:not(.locked)').forEach(b=>b.addEventListener('click',()=>{flushStageDraft(SCENARIO.tabs[activeTab].id);storeDraft();activeTab=Number(b.dataset.i);renderTabs();render();}));
 }
 
 function startTimer(){
@@ -133,9 +220,27 @@ async function save(stage, payload){
     if(btn) btn.disabled=false;
     return;
   }
-  try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()});myResponses[stage]={...payload,updatedAt:Date.now()}; discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} if(stage==='final'){render();requestAnimationFrame(()=>document.querySelector("#exitSection")?.scrollIntoView({behavior:"smooth",block:"start"}));} }
-  catch(e){ const n=document.querySelector('#saveMsg'); if(n){n.textContent='Not saved yet. Check connection and try again.';} }
-  finally { if(btn) btn.disabled=false; }
+  clearTimeout(stageDraftTimers.get(stage));stageDraftTimers.delete(stage);
+  // An explicit submission follows any pending autosave write.
+  try {
+   updateSaveMessage("Submitting...",stage);
+   await queueStageWrite(stage,async()=>{
+     if(state.archived||state.locked)throw Error("Classroom responses are closed.");
+     await update(ref(db,responseBase+"/"+stage),{...payload,status:"submitted",updatedAt:serverTimestamp()});
+   });
+   myResponses[stage]={...payload,status:"submitted",updatedAt:Date.now()};
+   stageDraftFingerprints.set(stage,JSON.stringify(payload));
+   stageDraftErrors.delete(stage);
+   discardDraft(stage);
+   updateSaveMessage("Submitted · saved online",stage);
+   if(stage==="final"){
+     render();
+     requestAnimationFrame(()=>document.querySelector("#exitSection")?.scrollIntoView({behavior:"smooth",block:"start"}));
+   }
+  }catch(e){
+   updateSaveMessage("Submission failed · your draft is retained; try Save again",stage);
+   console.error("SPARK submission failed",{stage,code:e?.code,message:e?.message});
+  }finally{if(btn)btn.disabled=false;}
 }
 
 function recOptions(name){ return RECOMMENDATIONS.map(x=>`<label class="choice"><input type="radio" name="${name}" value="${esc(x)}"> <span>${esc(x)}</span></label>`).join(''); }
@@ -172,13 +277,21 @@ function render(){
  }
  if(t.responseType==='recommendation') html += `<form class="card" id="form"><h2>What do you recommend now?</h2>${recOptions('rec')}<label>Which evidence matters most to your choice?</label><textarea id="evidence"></textarea><label>Why does that evidence matter? What are you still unsure about?</label><textarea id="reasoning"></textarea><label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><div class="actions"><button class="primary" data-save>Save preliminary recommendation</button><span id="saveMsg"></span></div></form><div class="card"><h2>Room snapshot</h2><div id="publishedSummary" class="muted">The moderator has not published a snapshot yet.</div></div>`;
  if(t.responseType==='update') html += `<form class="card" id="form"><h2>Does the new information matter to your decision?</h2>${recOptions('rec')}<label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><label>Why are you keeping or changing your recommendation?</label><textarea id="why"></textarea><div class="actions"><button class="primary" data-save>Save update</button><span id="saveMsg"></span></div></form>`;
- if(t.id==="final"&&myResponses.final?.updatedAt&&exitStatus!=="submitted"&&sessionStorage.getItem(exitKey)!=="yes")html+='<div class="notice"><strong>Final decision saved.</strong> <a href="#exitSection">Continue to optional student feedback ↓</a></div>';
+ if(t.id==="final"&&isStageSubmitted(myResponses.final)&&exitStatus!=="submitted"&&sessionStorage.getItem(exitKey)!=="yes")html+='<div class="notice"><strong>Final decision saved.</strong> <a href="#exitSection">Continue to optional student feedback ↓</a></div>';
  if(t.responseType==='final') html += `<form class="card" id="form"><h2>Your decision after considering the evidence</h2>${recOptions('rec')}<label>Why is this your choice now?</label><textarea id="finalReason"></textarea><label>What could happen or what could you learn that would make you reconsider?</label><textarea id="reopen"></textarea><label>What new information would NOT be enough to change your mind by itself?</label><textarea id="insufficient"></textarea><div class="actions"><button class="primary" data-save>Save final response</button><span id="saveMsg"></span></div></form>`;
  if(t.id==="final")html+=exitTicketHtml();
  $("#app").innerHTML=html;
  hydrate(t);
  applyDraft(t);
- if(!previewMode){const f=document.querySelector("#form");if(f)f.addEventListener("input",storeDraft);}
+ if(!previewMode){
+  const f=document.querySelector("#form");
+  if(f){
+   const stage=t.id;
+   const changed=()=>{storeDraft();scheduleDraftSave(stage);};
+   f.addEventListener("input",changed);
+   f.addEventListener("change",changed);
+  }
+ }
  const sb=document.querySelector("[data-save]");if(sb)sb.disabled=!!state.locked;
  const conf=$("#conf"); if(conf) conf.addEventListener('input',()=>$("#confVal").textContent=conf.value);
  const form=$("#form"); if(form) form.addEventListener('submit',async e=>{e.preventDefault(); if(state.locked){$("#saveMsg").textContent='Responses are currently locked.';return;} const payload=collect(t.responseType); if(payload.error){$("#saveMsg").textContent=payload.error;return;} await save(t.id,payload);});
@@ -212,7 +325,7 @@ function exitTicketHtml(){
  "What important information or viewpoint was missing?",
  "Would you want to do another scenario like this? Why or why not?"
  ];
- const unlocked=!!myResponses.final?.updatedAt;
+ const unlocked=isStageSubmitted(myResponses.final);
  return '<section class="card exit-ticket" id="exitSection"><h2>Help us improve SPARK</h2><p class="muted">Optional feedback. We do not ask for your name, and this form is saved separately from your scenario answers. Please do not include names or identifying details. You can skip it.</p>'+
  (unlocked?'<form id="exitTicketForm">'+prompts.map((q,i)=>'<label for="exitQ'+(i+1)+'">'+(i+1)+'. '+esc(q)+'</label><textarea id="exitQ'+(i+1)+'" maxlength="1200" rows="3"></textarea>').join('')+
  '<div class="actions"><button class="primary" type="submit" id="exitSubmit">Send feedback</button><button class="secondary" type="button" id="exitSkip">Skip feedback</button><span id="exitMessage" role="status"></span></div></form>':
@@ -224,7 +337,7 @@ function wireExitTicket(){
  document.querySelector("#exitSkip").addEventListener("click",()=>{exitStatus="skipped";render();});
  form.addEventListener("submit",async e=>{
   e.preventDefault();
-  if(!myResponses.final?.updatedAt){document.querySelector("#exitMessage").textContent="Save your final decision first.";return;}
+  if(!isStageSubmitted(myResponses.final)){document.querySelector("#exitMessage").textContent="Save your final decision first.";return;}
   const btn=document.querySelector("#exitSubmit");btn.disabled=true;
   const answers=Object.fromEntries([1,2,3,4,5].map(i=>["q"+i,document.querySelector("#exitQ"+i).value.trim()]));
   try{
@@ -246,7 +359,10 @@ function hydrate(t){
  const fields=['factors','sources','why','hope','review','evidence','reasoning','reopen','insufficient','finalReason']; fields.forEach(k=>{ if(r[k]!=null && $(`#${k}`)) $(`#${k}`).value=r[k]; });
  if(Array.isArray(r.questions)) r.questions.slice(0,3).forEach((q,i)=>{if($(`#q${i+1}`)) $(`#q${i+1}`).value=q;});
  if(Array.isArray(r.areas)) document.querySelectorAll('input[name="area"]').forEach(x=>x.checked=r.areas.includes(x.value));
- if($('#saveMsg')){ $('#saveMsg').textContent='Previously saved'; $('#saveMsg').className='saved'; }
+ if($('#saveMsg')){
+   $('#saveMsg').textContent=r.status==="draft"?"Draft saved automatically · click Save to submit":"Previously submitted";
+   $('#saveMsg').className='saved';
+ }
 }
 
 function collect(type){
