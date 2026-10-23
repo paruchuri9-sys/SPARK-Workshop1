@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPARK | Classroom Scenario</title><link rel="stylesheet" href="./styles.css">
+<style>.launch{max-width:670px;margin:48px auto}.launch label{display:block;margin:18px 0 7px}.launch input{width:100%;padding:12px;font:inherit;border:1px solid #bbb;border-radius:8px}.small{font-size:.93rem;color:#475467}.error{color:#b42318}.notice{margin:16px 0}.actions{margin-top:20px}</style></head>
+<body><header><div class="header-row"><div class="brand"><strong>SPARK</strong><span>Classroom decision scenario</span></div></div></header>
+<main class="launch"><div class="card"><h1>Data Center Decision Under Uncertainty</h1>
+<p>Consider a consequential community decision, evaluate evidence, and explain whether you would maintain or reconsider your position. Changing your opinion is not required.</p>
+<div class="notice"><strong>Teacher setup required.</strong> This live classroom route is awaiting security and school/IRB authorization checks. Do not enter student information or use this page to collect research responses until your SPARK coordinator explicitly enables a session.</div>
+<label for="session">Classroom session code</label><input id="session" maxlength="64" autocomplete="off" spellcheck="false" placeholder="Provided by your teacher" aria-describedby="hint">
+<p id="hint" class="small">Use a unique, teacher-provided session code. Never use “demo” for classroom data.</p>
+<div class="actions"><button class="primary" type="button" id="open" disabled>Classroom session not yet enabled</button> <a href="./participant.html?preview=1">Explore a non-recording preview</a></div>
+<p id="error" class="error" role="alert"></p>
+</div></main>
+<script>
+const session=document.getElementById('session');
+session.addEventListener('input',()=>{document.getElementById('error').textContent='Session launch is disabled until the study administrator confirms access controls and data permissions.';});
+</script></body></html>
