@@ -143,7 +143,7 @@ function cardHeader(t){
   const groups=[];
   for(let i=0;i<facts.length;i+=3)groups.push(facts.slice(i,i+3));
   const titles=t.id==='first-impression'?['The proposed project','Jobs and land','Taxes and open questions']:null;
-  html+=`<div class="${previewMode?'':'fact-grid'}">`+groups.map((items,i)=>`<section class="card fact-card fact-tone-${i%3}" aria-label="${esc(titles?.[i]||'Key information '+(i+1))}"><h2>${esc(titles?.[i]||'Key information '+(i+1))}</h2><ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')+'</div>';
+  html+=`<div class="fact-grid">`+groups.map((items,i)=>`<section class="card fact-card fact-tone-${i%3}" aria-label="${esc(titles?.[i]||'Key information '+(i+1))}"><h2>${esc(titles?.[i]||'Key information '+(i+1))}</h2><ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')+'</div>';
  }
  return html;
 }

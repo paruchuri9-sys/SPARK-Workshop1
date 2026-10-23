@@ -5,17 +5,25 @@
 <label for="groupCount">How will students work?</label><select id="groupCount"><option value="1">Whole class (one group)</option><option value="2">2 groups</option><option value="3">3 groups</option><option value="4">4 groups</option><option value="5">5 groups</option><option value="6">6 groups</option><option value="8">8 groups</option></select>
 <div class="actions"><button id="createSession" type="button" class="primary">Create classroom session</button></div><p id="setupError" role="alert" class="error"></p></section>
 <section id="classroom" hidden>
-<div class="card"><div class="header-row classroom-head"><div><p class="eyebrow">CLASSROOM SESSION</p><h1 id="sessionLabel">Session</h1><p class="muted">Share this code or link with your students. Keep this page open to guide the activity.</p></div><div><a id="newSessionLink" href="moderator.html">Start another class</a></div></div>
-<div class="grid classroom-join-grid"><div><label>Student code</label><p id="sessionId" class="session-code" aria-label="Student classroom code"></p><p id="groupDescription" class="muted"></p></div><div><label for="joinLink">Student join link</label><input id="joinLink" readonly><div class="actions"><button id="copyJoin" class="secondary" type="button">Copy student link</button><button id="openStudent" class="secondary" type="button">Open student view</button></div></div></div>
-<p id="copyStatus" class="saved" role="status"></p><div class="qr-area"><div><div id="qrCode" aria-label="QR code for the student join link"></div><p class="muted qr-hint">Students can scan to join.</p><button id="enlargeQr" class="secondary" type="button">Enlarge QR code</button></div></div></div>
-<div class="card classroom-control-card"><div class="header-row classroom-head"><div><p class="eyebrow">STUDENTS ARE ON</p><strong id="liveLabel">Connecting...</strong></div><div class="timer-box"><div id="timer" class="timer big-timer">--:--</div><div id="timerNote" class="muted"></div></div></div>
-<div class="actions timer-actions"><button id="startTimer" class="secondary" type="button">Start or resume timer</button><button id="pauseTimer" class="secondary" type="button">Pause</button><button id="addMinute" class="secondary" type="button">+1 min</button><button id="resetTimer" class="secondary" type="button">Clear</button></div>
+<div class="card session-compact"><div class="session-header"><div><p class="eyebrow">CLASSROOM SESSION</p><h1 id="sessionLabel">Classroom ready</h1><p class="muted">Students join using this code, link, or QR.</p></div><a id="newSessionLink" href="moderator.html">Start another class</a></div>
+<div class="session-tools">
+ <div class="session-code-area"><label>Class code</label><p id="sessionId" class="session-code" aria-label="Student classroom code"></p><p id="groupDescription" class="muted"></p></div>
+ <div class="join-link-area"><label for="joinLink">Student join link</label><input id="joinLink" readonly><div class="actions"><button id="copyJoin" class="secondary" type="button">Copy link</button><button id="openStudent" class="secondary" type="button">Test student join</button></div><p id="copyStatus" class="saved" role="status"></p></div>
+ <div class="qr-area"><div id="qrCode" aria-label="QR code for the student join link"></div><button id="enlargeQr" class="secondary" type="button">Enlarge QR</button></div>
+</div></div>
+<div class="card classroom-control-card">
+<div class="live-control-layout">
+ <div><p class="eyebrow">STUDENTS ARE ON</p><strong id="liveLabel">Connecting...</strong><p id="nextLiveLabel" class="muted"></p></div>
+ <div class="timer-box"><div id="timer" class="timer big-timer">--:--</div><div id="timerNote" class="muted"></div><div class="actions timer-actions"><button id="startTimer" class="secondary" type="button">Start timer</button><button id="pauseTimer" class="secondary" type="button">Pause</button><button id="addMinute" class="secondary" type="button">+1 min</button><button id="resetTimer" class="secondary" type="button">Clear</button></div></div>
+ <div class="live-advance"><button id="advanceLive" class="primary" type="button">Open next step</button><button id="advanceTimed" class="secondary" type="button">Open next + timer</button></div>
+</div>
 <details><summary>More classroom controls</summary><label class="choice"><input id="lockResponses" type="checkbox"> Stop students from editing answers</label></details>
-<p id="syncStatus" role="status" class="muted">Checking connection...</p></div>
+<p id="syncStatus" role="status" class="muted">Checking connection...</p>
+</div>
 <div class="card step-guide-card"><nav id="stepNav" class="step-nav" aria-label="Classroom activity steps"></nav>
 <div class="header-row classroom-head"><div><p class="eyebrow" id="viewState">VIEWING</p><h2 id="viewTitle"></h2></div><div class="actions"><button id="prevView" class="secondary" type="button">← Previous</button><button id="nextView" class="secondary" type="button">Next →</button></div></div>
 <section class="prompt-panel"><h3>Suggested prompts for the group</h3><ul id="readAloud" class="read-aloud"></ul><p id="modNote" class="teacher-tip"></p></section><p class="muted" id="viewMeta"></p>
-<div class="actions"><button id="openStep" class="primary" type="button">Open this step for students</button><button id="openAndTime" class="secondary" type="button">Open next step + start timer</button></div></div>
+<div class="actions"><button id="openStep" class="secondary" type="button">Open selected step for students</button><button id="openAndTime" class="secondary" type="button">Open selected next step + timer</button></div></div>
 <div class="card student-status-card"><h2>Student activity</h2><p><strong id="presence">...</strong> connected now · <strong id="responseCount">...</strong> with saved records</p>
 <div class="actions"><button id="refreshSummary" class="secondary" type="button">View answer summary for this step</button></div><div id="summary"></div>
 <details><summary>Optional: Share summary with students</summary><p class="muted">Only share after students have recorded their independent answers.</p><button id="publishSummary" class="secondary" type="button" disabled>Show summary to class</button></details></div>

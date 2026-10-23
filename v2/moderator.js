@@ -57,7 +57,7 @@ async function openSession(code){
  $("#authStatus").textContent="Class "+code;
  if(!isOwner){
    $("#syncStatus").textContent="Teacher controls unavailable in this browser. Return to the browser that created this session, or contact the SPARK team.";
-   document.querySelectorAll("#startTimer,#pauseTimer,#addMinute,#resetTimer,#lockResponses,#openStep,#publishSummary,#refreshSummary").forEach(x=>x.disabled=true);
+   document.querySelectorAll("#startTimer,#pauseTimer,#addMinute,#resetTimer,#lockResponses,#openStep,#openAndTime,#advanceLive,#advanceTimed,#publishSummary,#refreshSummary").forEach(x=>x.disabled=true);
  }
  bind();
 }
@@ -95,6 +95,11 @@ function bind(){
 function remaining(){return state.timerPausedRemaining!=null?state.timerPausedRemaining:(state.timerEnd?state.timerEnd-now():null);}
 function renderLive(){
  $("#liveLabel").textContent=steps[state.currentTab]?.label||"Unknown step";
+ const hasNext=state.currentTab<steps.length-1;
+ $("#advanceLive").disabled=!isOwner||!hasNext;
+ $("#advanceTimed").disabled=!isOwner||!hasNext;
+ $("#nextLiveLabel").textContent=hasNext?"Next: "+steps[state.currentTab+1].label:"All seven steps are open.";
+ $("#advanceTimed").textContent=hasNext?"Open next + "+(steps[state.currentTab+1].minutes||5)+" min timer":"All steps opened";
  $("#lockResponses").checked=!!state.locked;
  clearInterval(timerInterval);
  const draw=()=>{let ms=remaining();if(ms==null){$("#timer").textContent="--:--";$("#timerNote").textContent="";return;}let secs=Math.ceil(Math.max(0,ms)/1000);$("#timer").textContent=Math.floor(secs/60)+":"+String(secs%60).padStart(2,"0");$("#timerNote").textContent=state.timerPausedRemaining!=null?"Paused":ms<=0?"Time is up":"Running";};
@@ -128,6 +133,15 @@ function renderView(){
  $("#openAndTime").disabled=!isOwner||viewTab!==live+1;
  $("#openAndTime").textContent=viewTab===live+1?"Open next step + start "+(t.minutes||5)+" min timer":"Select the next unopened step to start timer";
 }
+function advanceLiveStep(withTimer){
+ if(!isOwner||state.currentTab>=steps.length-1)return;
+ const next=state.currentTab+1;
+ const data={currentTab:next,locked:false,timerEnd:withTimer?now()+(steps[next].minutes||5)*60000:null,timerPausedRemaining:null};
+ $("#advanceLive").disabled=true;$("#advanceTimed").disabled=true;
+ patch(data).then(ok=>{if(!ok){$("#advanceLive").disabled=false;$("#advanceTimed").disabled=false;}});
+}
+$("#advanceLive").addEventListener("click",()=>advanceLiveStep(false));
+$("#advanceTimed").addEventListener("click",()=>advanceLiveStep(true));
 $("#openAndTime").addEventListener("click",async()=>{
  if(!isOwner||viewTab!==state.currentTab+1)return;
  const button=$("#openAndTime");button.disabled=true;
