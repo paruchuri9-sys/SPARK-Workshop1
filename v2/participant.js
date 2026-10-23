@@ -62,6 +62,7 @@ if (previewMode) {
   onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); else if(SCENARIO.tabs[activeTab]?.id==="final" && myResponses.final?.updatedAt && !document.querySelector("#exitTicketForm") && exitStatus!=="submitted" && exitStatus!=="skipped"){storeDraft();render();} }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
   onValue(ref(db,".info/serverTimeOffset"), snap => {serverOffset=snap.val()||0;});
   onValue(stateRef, snap => {
+    if(snap.val()?.archived){ $("#status").textContent="This class is finished and submissions are closed.";return; }
     if(!snap.exists()) { $("#status").textContent="Session not found";return; }
     const nextState = { ...state, ...(snap.val() || {}) };
     const previous=activeTab;
@@ -132,7 +133,7 @@ async function save(stage, payload){
     if(btn) btn.disabled=false;
     return;
   }
-  try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()});myResponses[stage]={...payload,updatedAt:Date.now()}; discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} if(stage==='final')render(); }
+  try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()});myResponses[stage]={...payload,updatedAt:Date.now()}; discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} if(stage==='final'){render();requestAnimationFrame(()=>document.querySelector("#exitSection")?.scrollIntoView({behavior:"smooth",block:"start"}));} }
   catch(e){ const n=document.querySelector('#saveMsg'); if(n){n.textContent='Not saved yet. Check connection and try again.';} }
   finally { if(btn) btn.disabled=false; }
 }
@@ -171,6 +172,7 @@ function render(){
  }
  if(t.responseType==='recommendation') html += `<form class="card" id="form"><h2>What do you recommend now?</h2>${recOptions('rec')}<label>Which evidence matters most to your choice?</label><textarea id="evidence"></textarea><label>Why does that evidence matter? What are you still unsure about?</label><textarea id="reasoning"></textarea><label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><div class="actions"><button class="primary" data-save>Save preliminary recommendation</button><span id="saveMsg"></span></div></form><div class="card"><h2>Room snapshot</h2><div id="publishedSummary" class="muted">The moderator has not published a snapshot yet.</div></div>`;
  if(t.responseType==='update') html += `<form class="card" id="form"><h2>Does the new information matter to your decision?</h2>${recOptions('rec')}<label>Confidence: <span id="confVal">50</span>%</label><input id="conf" type="range" min="0" max="100" value="50"><label>Why are you keeping or changing your recommendation?</label><textarea id="why"></textarea><div class="actions"><button class="primary" data-save>Save update</button><span id="saveMsg"></span></div></form>`;
+ if(t.id==="final"&&myResponses.final?.updatedAt&&exitStatus!=="submitted"&&sessionStorage.getItem(exitKey)!=="yes")html+='<div class="notice"><strong>Final decision saved.</strong> <a href="#exitSection">Continue to optional student feedback ↓</a></div>';
  if(t.responseType==='final') html += `<form class="card" id="form"><h2>Your decision after considering the evidence</h2>${recOptions('rec')}<label>Why is this your choice now?</label><textarea id="finalReason"></textarea><label>What could happen or what could you learn that would make you reconsider?</label><textarea id="reopen"></textarea><label>What new information would NOT be enough to change your mind by itself?</label><textarea id="insufficient"></textarea><div class="actions"><button class="primary" data-save>Save final response</button><span id="saveMsg"></span></div></form>`;
  if(t.id==="final")html+=exitTicketHtml();
  $("#app").innerHTML=html;
