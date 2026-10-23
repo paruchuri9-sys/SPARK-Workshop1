@@ -130,8 +130,8 @@ function setupGroupLinks(){
 }
 function renderGroupProgress(){
  const groups=Array.from({length:groupCount},(_,i)=>({group:i+1,online:0,saved:0}));
- Object.values(presenceRows).forEach(p=>{const g=Number(p?.group||1);if(groups[g-1])groups[g-1].online++;});
- Object.values(responseRows).forEach(r=>{const g=Number(r?.participant?.group||1);if(groups[g-1]&&steps.some(t=>r[t.id]&&r[t.id].updatedAt!=null))groups[g-1].saved++;});
+ Object.values(presenceRows).forEach(p=>{const g=moderatorGroup||Number(p?.group||1);if(groups[g-1])groups[g-1].online++;});
+ Object.values(responseRows).forEach(r=>{const g=moderatorGroup||Number(r?.participant?.group||1);if(groups[g-1]&&steps.some(t=>r[t.id]&&r[t.id].updatedAt!=null))groups[g-1].saved++;});
  $("#presence").textContent=groups.reduce((a,g)=>a+g.online,0);
  $("#responseCount").textContent=groups.reduce((a,g)=>a+g.saved,0);
  $("#groupProgress").innerHTML=groupCount===1?"":groups.map(g=>'<span class="group-stat"><strong>Group '+g.group+'</strong> '+g.online+' online · '+g.saved+' saved</span>').join("");
@@ -153,7 +153,12 @@ function bind(){
  unsubs.forEach(x=>x());unsubs=[];
  const fail=(where,e)=>{$("#syncStatus").textContent="Cannot read "+where+" ("+(e?.code||"connection error")+").";};
  unsubs.push(onValue(ref(db,".info/serverTimeOffset"),s=>{serverOffset=s.val()||0;}));
- unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/state"),s=>{
+ if(separateMode&&!moderatorGroup&&isSessionOwner){
+   unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/groupStates"),s=>{
+    $("#groupStages").innerHTML=Object.entries(s.val()||{}).map(([g,v])=>"<span class=\"group-stat\">Group "+esc(g)+": "+esc(steps[v.currentTab||0]?.label||"Unknown")+"</span>").join("");
+   },e=>fail("group progress",e)));
+ }
+ unsubs.push(onValue(ref(db,statePath()),s=>{
    if(!s.exists()){fail("class state");return;}
    state={currentTab:0,...s.val()};
    if(viewTab===null)viewTab=state.currentTab;
@@ -161,8 +166,8 @@ function bind(){
    if(isOwner)$("#syncStatus").textContent="Connected to class "+sessionId;
  },e=>fail("class state",e)));
  if(isOwner){
-  unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/presence"),s=>{presenceRows=s.val()||{};renderGroupProgress();},e=>fail("students online",e)));
-  unsubs.push(onValue(ref(db,"responses/"+sessionId),s=>{responseRows=s.val()||{};renderGroupProgress();},e=>fail("saved records",e)));
+  unsubs.push(onValue(ref(db,separateMode&&moderatorGroup?"sessions/"+sessionId+"/groupPresence/"+moderatorGroup:"sessions/"+sessionId+"/presence"),s=>{presenceRows=s.val()||{};renderGroupProgress();},e=>fail("students online",e)));
+  unsubs.push(onValue(ref(db,responsePath()),s=>{responseRows=s.val()||{};renderGroupProgress();},e=>fail("saved records",e)));
  }
 }
 function remaining(){return state.timerPausedRemaining!=null?state.timerPausedRemaining:(state.timerEnd?state.timerEnd-now():null);}
@@ -178,7 +183,7 @@ function renderLive(){
  const draw=()=>{let ms=remaining();if(ms==null){$("#timer").textContent="--:--";$("#timerNote").textContent="";return;}let secs=Math.ceil(Math.max(0,ms)/1000);$("#timer").textContent=Math.floor(secs/60)+":"+String(secs%60).padStart(2,"0");$("#timerNote").textContent=state.timerPausedRemaining!=null?"Paused":ms<=0?"Time is up":"Running";};
  draw();timerInterval=setInterval(draw,500);
 }
-async function patch(next){if(!isOwner||!sessionId)return false;try{await update(ref(db,"sessions/"+sessionId+"/state"),next);return true;}catch(e){$("#syncStatus").textContent="Could not update class: "+(e.code||e.message);return false;}}
+async function patch(next){if(!isOwner||!sessionId)return false;try{await update(ref(db,statePath()),next);return true;}catch(e){$("#syncStatus").textContent="Could not update class: "+(e.code||e.message);return false;}}
 $("#startTimer").addEventListener("click",()=>{
  if(state.timerPausedRemaining!=null)return patch({timerEnd:now()+state.timerPausedRemaining,timerPausedRemaining:null});
  if(state.timerEnd&&state.timerEnd>now())return;
@@ -233,7 +238,7 @@ async function computeSummary(){
  const token=++summaryRequest,step=steps[viewTab].id,code=sessionId;
  $("#publishSummary").disabled=true;$("#summary").textContent="Loading answers...";
  try{
- const snap=await get(ref(db,"responses/"+code));
+ const snap=await get(ref(db,responsePath()));
  if(token!==summaryRequest||steps[viewTab].id!==step||sessionId!==code)return null;
  const rows=Object.values(snap.val()||{}),items={};
  if(["first-impression","preliminary","new-information","final"].includes(step))
@@ -251,6 +256,6 @@ $("#refreshSummary").addEventListener("click",computeSummary);
 $("#publishSummary").addEventListener("click",async()=>{
  if(!isOwner||!summary||summary.step!==steps[viewTab].id||summary.session!==sessionId){$("#summary").textContent="Refresh this step's summary before sharing.";return;}
  const picked=summary;
- try{await set(ref(db,"sessions/"+picked.session+"/published/"+picked.step),picked.payload);$("#summary").insertAdjacentText("beforeend"," Shared with class.");}
+ try{await set(ref(db,publishedPath(picked.step)),picked.payload);$("#summary").insertAdjacentText("beforeend"," Shared with class.");}
  catch(e){$("#summary").textContent="Cannot share summary: "+(e.code||e.message);}
 });
