@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPARK · Meeting Availability</title><link rel="stylesheet" href="schedule.css"></head>
+<body><header><div class="brand">SPARK <span>Meeting availability</span></div></header>
+<main class="wrap">
+<section class="panel" id="loading">Connecting to the meeting poll…</section>
+<section id="poll" hidden>
+ <div class="panel"><div class="eyebrow">AVAILABILITY POLL</div><h1 id="meetingTitle"></h1><p id="meetingMeta" class="subtle"></p><p>Choose every one-hour slot that works for you. You can select more than one. Counts update as colleagues respond; their names are not displayed.</p></div>
+ <form id="availabilityForm" class="panel"><label for="participantName" class="strong">Your name</label><input id="participantName" maxlength="100" autocomplete="name" required placeholder="First and last name">
+ <h2>When are you available?</h2><p class="subtle">Check all suitable slots. All times are Central Time (America/Chicago).</p><div id="slotGroups"></div><label class="option"><input id="noneAvailable" type="checkbox"> None of these times work for me</label>
+ <fieldset><legend id="followupQuestion"></legend><label class="option"><input type="radio" name="followup" value="yes" required> Yes</label><label class="option"><input type="radio" name="followup" value="maybe"> Maybe</label><label class="option"><input type="radio" name="followup" value="no"> No</label></fieldset>
+ <div class="actions"><button class="primary" id="submitVote" type="submit">Save my availability</button><span id="saveStatus" role="status"></span></div>
+ <p class="small subtle">You can update your answers in the same browser. The organizer can see your name and selections; other teachers see counts only in this page. Please use one response per person.</p>
+ </form>
+</section>
+<section id="problem" class="panel" hidden role="alert"></section>
+</main><script type="module" src="schedule.js"></script></body></html>
