@@ -23,6 +23,7 @@ const requested = (new URLSearchParams(location.search).get("session")||"").toUp
 const showError = m => {$("#setupError").textContent=m;$("#authStatus").textContent="Action needed";};
 const connect = async () => {if(!auth.currentUser)await signInAnonymously(auth);};
 
+function refreshModeOption(){const multiple=Number($("#groupCount").value)>1;$("#separateModerators").disabled=!multiple;if(!multiple)$("#separateModerators").checked=false;$("#moderatorModeHelp").textContent=multiple?"Unchecked: one teacher advances every group. Checked: each group gets its own moderator, stage and timer.":"For one group, the classroom has one moderator.";}$("#groupCount").addEventListener("change",refreshModeOption);refreshModeOption();
 $("#createSession").addEventListener("click",async()=>{
  const btn=$("#createSession");btn.disabled=true;$("#setupError").textContent="";
  let operation="signing in", code="", ownerSaved=false, sessionSaved=false;
@@ -98,7 +99,7 @@ async function openSession(code){
  renderJoinQr();
  $("#authStatus").textContent="Class "+code+(moderatorGroup?" · Group "+moderatorGroup:"");
  if(!isOwner){
-   $("#syncStatus").textContent="Teacher controls unavailable in this browser. Return to the browser that created this session, or contact the SPARK team.";
+   $("#syncStatus").textContent=isSessionOwner&&separateMode&&!moderatorGroup?"Overview only. Each group moderator controls their own step and timer.":"Moderator controls unavailable in this browser. Use the original moderator link, or contact the SPARK team.";
    document.querySelectorAll("#startTimer,#pauseTimer,#addMinute,#resetTimer,#lockResponses,#openStep,#openAndTime,#advanceLive,#advanceTimed,#publishSummary,#refreshSummary").forEach(x=>x.disabled=true);
  }
  bind();
