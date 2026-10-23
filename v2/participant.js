@@ -19,6 +19,7 @@ let stateRef = null, responseBase = null;
 let serverOffset=0, publishedUnsub=null;
 let exitStatus="not_started";
 const exitKey="spark_exit_completed_"+sessionId;
+const isStageSubmitted = r => !!r&&(r.status==="submitted"||(!r.status&&!!r.updatedAt));
 const draftKey = id => "spark_draft_"+sessionId+"_"+uid+"_"+id;
 const stageWriteQueues = new Map();
 const stageDraftTimers = new Map();
@@ -133,7 +134,7 @@ if (previewMode) {
   $("#status").textContent = "PREVIEW MODE";
   renderTabs(); render(); startTimer();
 } else if(db && stateRef) {
-  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); else if(SCENARIO.tabs[activeTab]?.id==="final" && myResponses.final?.updatedAt && !document.querySelector("#exitTicketForm") && exitStatus!=="submitted" && exitStatus!=="skipped"){storeDraft();render();} }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
+  onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; if(!document.querySelector("#form"))render(); else if(SCENARIO.tabs[activeTab]?.id==="final" && isStageSubmitted(myResponses.final) && !document.querySelector("#exitTicketForm") && exitStatus!=="submitted" && exitStatus!=="skipped"){storeDraft();render();} }, e => { $("#status").textContent="Cannot load saved answers ("+(e?.code||"connection error")+"). Tell your teacher."; });
   onValue(ref(db,".info/serverTimeOffset"), snap => {serverOffset=snap.val()||0;});
   onValue(stateRef, snap => {
     if(snap.val()?.archived){ $("#status").textContent="This class is finished and submissions are closed.";return; }
