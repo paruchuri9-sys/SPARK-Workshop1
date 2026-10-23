@@ -10,6 +10,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",
 const steps = SCENARIO.tabs;
 let sessionId = "", isOwner = false, serverOffset = 0, state = {currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false};
 let viewTab = null, summary = null, summaryRequest = 0, timerInterval, unsubs = [];
+let groupCount=1, activeGroup=1, presenceRows={}, responseRows={};
 const now = () => Date.now()+serverOffset;
 const requested = (new URLSearchParams(location.search).get("session")||"").toUpperCase().replace(/[^A-F0-9]/g,"");
 const showError = m => {$("#setupError").textContent=m;$("#authStatus").textContent="Action needed";};
@@ -51,8 +52,10 @@ async function openSession(code){
  sessionId=code;isOwner=owner.val()===auth.currentUser.uid;
  $("#setup").hidden=true;$("#classroom").hidden=false;$("#sessionId").textContent=code;
  $("#sessionLabel").textContent=isOwner?"Classroom ready":"View only";
- $("#groupDescription").textContent=Number(st.val().groupCount||1)===1?"One whole-class group, individual responses":st.val().groupCount+" groups, individual responses";
+ groupCount=Math.max(1,Number(st.val().groupCount||1));
+ $("#groupDescription").textContent=groupCount===1?"One whole-class group, individual responses":groupCount+" groups, individual responses";
  $("#joinLink").value=new URL("join.html?session="+encodeURIComponent(code),location.href).href;
+ setupGroupLinks();
  renderJoinQr();
  $("#authStatus").textContent="Class "+code;
  if(!isOwner){
@@ -63,12 +66,31 @@ async function openSession(code){
 }
 $("#copyJoin").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#joinLink").value);$("#copyStatus").textContent="Student link copied.";}catch{$("#joinLink").select();$("#copyStatus").textContent="Select and copy the link above."; }});
 $("#openStudent").addEventListener("click",()=>window.open($("#joinLink").value,"_blank","noopener"));
+function groupUrl(g){const url=new URL("join.html",location.href);url.searchParams.set("session",sessionId);if(groupCount>1)url.searchParams.set("group",String(g));return url.href;}
+function setupGroupLinks(){
+ const el=$("#groupLinks");el.innerHTML="";
+ if(groupCount===1){el.hidden=true;return;}el.hidden=false;
+ const label=document.createElement("label");label.textContent="Choose a group link";label.htmlFor="groupLinkSelect";el.appendChild(label);
+ const select=document.createElement("select");select.id="groupLinkSelect";
+ for(let i=1;i<=groupCount;i++){const o=document.createElement("option");o.value=String(i);o.textContent="Group "+i;select.appendChild(o);}
+ select.addEventListener("change",()=>{activeGroup=Number(select.value);$("#joinLink").value=groupUrl(activeGroup);renderJoinQr();});
+ el.appendChild(select);
+ activeGroup=1;$("#joinLink").value=groupUrl(1);
+}
+function renderGroupProgress(){
+ const groups=Array.from({length:groupCount},(_,i)=>({group:i+1,online:0,saved:0}));
+ Object.values(presenceRows).forEach(p=>{const g=Number(p?.group||1);if(groups[g-1])groups[g-1].online++;});
+ Object.values(responseRows).forEach(r=>{const g=Number(r?.participant?.group||1);if(groups[g-1]&&steps.some(t=>r[t.id]&&r[t.id].updatedAt!=null))groups[g-1].saved++;});
+ $("#presence").textContent=groups.reduce((a,g)=>a+g.online,0);
+ $("#responseCount").textContent=groups.reduce((a,g)=>a+g.saved,0);
+ $("#groupProgress").innerHTML=groupCount===1?"":groups.map(g=>'<span class="group-stat"><strong>Group '+g.group+'</strong> '+g.online+' online · '+g.saved+' saved</span>').join("");
+}
 function makeQr(target,size){
  target.textContent="";
  if(typeof QRCode!=="function"){target.textContent="QR unavailable. Use the student link.";return;}
  new QRCode(target,{text:$("#joinLink").value,width:size,height:size,correctLevel:QRCode.CorrectLevel.M});
 }
-function renderJoinQr(){makeQr($("#qrCode"),128);$("#qrSessionLabel").textContent="Class code: "+sessionId;}
+function renderJoinQr(){makeQr($("#qrCode"),128);$("#qrSessionLabel").textContent="Class code: "+sessionId+(groupCount>1?" · Group "+activeGroup:"");}
 $("#enlargeQr").addEventListener("click",()=>{makeQr($("#qrLarge"),300);$("#qrDialog").showModal();});
 if(requested)openSession(requested).catch(e=>{showError(e.message);$("#setup").hidden=false;$("#classroom").hidden=true;});
 else $("#authStatus").textContent="Create a class to begin";
@@ -88,8 +110,8 @@ function bind(){
    if(isOwner)$("#syncStatus").textContent="Connected to class "+sessionId;
  },e=>fail("class state",e)));
  if(isOwner){
-  unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/presence"),s=>{$("#presence").textContent=Object.keys(s.val()||{}).length;},e=>fail("students online",e)));
-  unsubs.push(onValue(ref(db,"responses/"+sessionId),s=>{$("#responseCount").textContent=Object.keys(s.val()||{}).length;},e=>fail("saved records",e)));
+  unsubs.push(onValue(ref(db,"sessions/"+sessionId+"/presence"),s=>{presenceRows=s.val()||{};renderGroupProgress();},e=>fail("students online",e)));
+  unsubs.push(onValue(ref(db,"responses/"+sessionId),s=>{responseRows=s.val()||{};renderGroupProgress();},e=>fail("saved records",e)));
  }
 }
 function remaining(){return state.timerPausedRemaining!=null?state.timerPausedRemaining:(state.timerEnd?state.timerEnd-now():null);}
@@ -138,7 +160,7 @@ function advanceLiveStep(withTimer){
  const next=state.currentTab+1;
  const data={currentTab:next,locked:false,timerEnd:withTimer?now()+(steps[next].minutes||5)*60000:null,timerPausedRemaining:null};
  $("#advanceLive").disabled=true;$("#advanceTimed").disabled=true;
- patch(data).then(ok=>{if(!ok){$("#advanceLive").disabled=false;$("#advanceTimed").disabled=false;}});
+ patch(data).then(ok=>{if(ok){setView(next);}else{$("#advanceLive").disabled=false;$("#advanceTimed").disabled=false;}});
 }
 $("#advanceLive").addEventListener("click",()=>advanceLiveStep(false));
 $("#advanceTimed").addEventListener("click",()=>advanceLiveStep(true));

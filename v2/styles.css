@@ -167,3 +167,15 @@ details summary { cursor: pointer; font-weight: 650; }
 .evidence-tone-3{background:#f5efff;border-color:#d2bde8}
 .selected-tag{display:inline-block;font-size:.76rem;font-weight:750;padding:3px 8px;margin-left:9px;border-radius:50px;background:#d9e8ff;color:#164b89;vertical-align:middle}
 @media(max-width:620px){.evidence-grid{grid-template-columns:1fr}.evidence-card summary{padding:13px}}
+
+/* Small group-level status near student join controls */
+.group-links{margin:7px 0}
+.group-links label{font-size:13px;font-weight:600;margin:4px 0}
+.group-links select{padding:8px;max-width:210px}
+.group-progress{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.group-stat{display:inline-block;padding:5px 9px;border:1px solid #c8d9ce;border-radius:7px;background:#eef8f2;font-size:13px}
+.group-stat strong{color:#20583e}
+.live-advance #advanceTimed{font-weight:750;font-size:15px;padding:13px 12px}
+.live-advance #advanceLive{font-size:13px}
+.evidence-grid{align-items:start}
+.evidence-grid>.evidence-card{align-self:start}
