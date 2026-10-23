@@ -20,6 +20,80 @@ let serverOffset=0, publishedUnsub=null;
 let exitStatus="not_started";
 const exitKey="spark_exit_completed_"+sessionId;
 const draftKey = id => "spark_draft_"+sessionId+"_"+uid+"_"+id;
+const stageWriteQueues = new Map();
+const stageDraftTimers = new Map();
+const stageDraftErrors = new Map();
+const stageDraftFingerprints = new Map();
+const AUTO_SAVE_DELAY_MS=900;
+function updateSaveMessage(label,stage){
+ if(SCENARIO.tabs[activeTab]?.id!==stage)return;
+ const node=document.querySelector("#saveMsg");
+ if(node)node.textContent=label;
+}
+function queueStageWrite(stage,work){
+ const prior=stageWriteQueues.get(stage)||Promise.resolve();
+ const next=prior.catch(()=>{}).then(work);
+ stageWriteQueues.set(stage,next);
+ return next;
+}
+function draftPayload(type){
+ const checked=n=>document.querySelector('input[name="'+n+'"]:checked')?.value||"";
+ const val=id=>document.getElementById(id)?.value?.trim()||"";
+ if(type==="initial")return {recommendation:checked("rec"),confidence:Number(val("conf")||50),factors:val("factors")};
+ if(type==="questions")return {questions:[1,2,3].map(i=>val("q"+i)).filter(Boolean),sources:val("sources")};
+ if(type==="investigation")return {areas:[...document.querySelectorAll('input[name="area"]:checked')].map(n=>n.value),why:val("why"),hope:val("hope")};
+ if(type==="evidence-review")return {review:val("review")};
+ if(type==="recommendation")return {recommendation:checked("rec"),evidence:val("evidence"),reasoning:val("reasoning"),confidence:Number(val("conf")||50)};
+ if(type==="update")return {recommendation:checked("rec"),confidence:Number(val("conf")||50),why:val("why")};
+ if(type==="final")return {recommendation:checked("rec"),finalReason:val("finalReason"),reopen:val("reopen"),insufficient:val("insufficient")};
+ return {};
+}
+function hasMeaningfulDraft(t,p){
+ if(!p)return false;
+ if(t.responseType==="initial")return !!(p.recommendation||p.factors);
+ if(t.responseType==="questions")return !!(p.questions?.length||p.sources);
+ if(t.responseType==="investigation")return !!(p.areas?.length||p.why||p.hope);
+ if(t.responseType==="evidence-review")return !!p.review;
+ if(t.responseType==="recommendation")return !!(p.recommendation||p.evidence||p.reasoning);
+ if(t.responseType==="update")return !!(p.recommendation||p.why);
+ if(t.responseType==="final")return !!(p.recommendation||p.finalReason||p.reopen||p.insufficient);
+ return false;
+}
+function scheduleDraftSave(stage){
+ if(previewMode||!db||!responseBase||state.locked||state.archived)return;
+ clearTimeout(stageDraftTimers.get(stage));
+ updateSaveMessage("Saving draft soon...",stage);
+ stageDraftTimers.set(stage,setTimeout(()=>flushStageDraft(stage),AUTO_SAVE_DELAY_MS));
+}
+function flushStageDraft(stage){
+ clearTimeout(stageDraftTimers.get(stage));stageDraftTimers.delete(stage);
+ if(previewMode||!db||state.locked||state.archived)return Promise.resolve(false);
+ const t=SCENARIO.tabs.find(x=>x.id===stage);
+ if(!t||SCENARIO.tabs[activeTab]?.id!==stage)return Promise.resolve(false);
+ storeDraftForStage(activeTab);
+ const payload=draftPayload(t.responseType);
+ if(!hasMeaningfulDraft(t,payload))return Promise.resolve(false);
+ const fingerprint=JSON.stringify(payload);
+ if(stageDraftFingerprints.get(stage)===fingerprint)return stageWriteQueues.get(stage)||Promise.resolve(true);
+ stageDraftFingerprints.set(stage,fingerprint);
+ updateSaveMessage("Saving draft...",stage);
+ return queueStageWrite(stage,async()=>{
+  if(state.archived||state.locked)return false;
+  try{
+   await update(ref(db,responseBase+"/"+stage),{...payload,status:"draft",autosavedAt:serverTimestamp()});
+   stageDraftErrors.delete(stage);
+   // Keep the local draft until an explicit submit confirms the response.
+   updateSaveMessage("Draft saved automatically · click Save to submit",stage);
+   return true;
+  }catch(e){
+   stageDraftFingerprints.delete(stage);
+   stageDraftErrors.set(stage,e?.code||e?.message||"unknown");
+   updateSaveMessage("Draft not saved online · retry Save",stage);
+   console.error("SPARK autosave failed",{stage,code:e?.code,message:e?.message});
+   return false;
+  }
+ });
+}
 const getDraft = id => {try{return JSON.parse(sessionStorage.getItem(draftKey(id))||"null");}catch{return null;}};
 function discardDraft(id){try{sessionStorage.removeItem(draftKey(id));}catch{}}
 function storeDraftForStage(i){if(previewMode)return;const t=SCENARIO.tabs[i];if(!t||!document.querySelector("#form"))return;try{const data={};document.querySelectorAll("#form input,#form textarea").forEach(node=>{if(!node.id&&!node.name)return;const k=node.id||node.name;if(node.type==="radio"&&!node.checked)return;if(node.type==="checkbox"){if(!data[node.name])data[node.name]=[];if(node.checked)data[node.name].push(node.value);}else data[k]=node.value;});sessionStorage.setItem(draftKey(t.id),JSON.stringify(data));}catch{}}
@@ -66,9 +140,14 @@ if (previewMode) {
     if(!snap.exists()) { $("#status").textContent="Session not found";return; }
     const nextState = { ...state, ...(snap.val() || {}) };
     const previous=activeTab;
-    if (nextState.currentTab > state.currentTab) activeTab = nextState.currentTab;
-    if (activeTab > nextState.currentTab) activeTab = nextState.currentTab;
-    if(previous!==activeTab)storeDraftForStage(previous);
+    const incomingTab=nextState.currentTab>state.currentTab?nextState.currentTab:
+      activeTab>nextState.currentTab?nextState.currentTab:activeTab;
+    if(previous!==incomingTab){
+      // Capture form while it is still on screen, before switching to the new stage.
+      flushStageDraft(SCENARIO.tabs[previous].id);
+      storeDraftForStage(previous);
+    }
+    activeTab=incomingTab;
     const changed=previous!==activeTab;
     state = nextState;
     if(changed){renderTabs();render();}
@@ -111,7 +190,7 @@ $("#resetParticipant").addEventListener("click", async () => {
 
 function renderTabs(){
   $("#tabs").innerHTML = SCENARIO.tabs.map((t,i)=>`<button class="tab ${i===activeTab?'active':''} ${i>state.currentTab?'locked':''}" data-i="${i}" ${i>state.currentTab?'disabled':''}>${t.label}</button>`).join("");
-  document.querySelectorAll('.tab:not(.locked)').forEach(b=>b.addEventListener('click',()=>{storeDraft();activeTab=Number(b.dataset.i); renderTabs(); render();}));
+  document.querySelectorAll('.tab:not(.locked)').forEach(b=>b.addEventListener('click',()=>{flushStageDraft(SCENARIO.tabs[activeTab].id);storeDraft();activeTab=Number(b.dataset.i);renderTabs();render();}));
 }
 
 function startTimer(){
@@ -133,9 +212,27 @@ async function save(stage, payload){
     if(btn) btn.disabled=false;
     return;
   }
-  try { await update(ref(db, `${responseBase}/${stage}`), {...payload, updatedAt:serverTimestamp()});myResponses[stage]={...payload,updatedAt:Date.now()}; discardDraft(stage); const n=document.querySelector('#saveMsg'); if(n){n.textContent='Saved'; n.className='saved';} if(stage==='final'){render();requestAnimationFrame(()=>document.querySelector("#exitSection")?.scrollIntoView({behavior:"smooth",block:"start"}));} }
-  catch(e){ const n=document.querySelector('#saveMsg'); if(n){n.textContent='Not saved yet. Check connection and try again.';} }
-  finally { if(btn) btn.disabled=false; }
+  clearTimeout(stageDraftTimers.get(stage));stageDraftTimers.delete(stage);
+  // An explicit submission follows any pending autosave write.
+  try {
+   updateSaveMessage("Submitting...",stage);
+   await queueStageWrite(stage,async()=>{
+     if(state.archived||state.locked)throw Error("Classroom responses are closed.");
+     await update(ref(db,responseBase+"/"+stage),{...payload,status:"submitted",updatedAt:serverTimestamp()});
+   });
+   myResponses[stage]={...payload,status:"submitted",updatedAt:Date.now()};
+   stageDraftFingerprints.set(stage,JSON.stringify(payload));
+   stageDraftErrors.delete(stage);
+   discardDraft(stage);
+   updateSaveMessage("Submitted · saved online",stage);
+   if(stage==="final"){
+     render();
+     requestAnimationFrame(()=>document.querySelector("#exitSection")?.scrollIntoView({behavior:"smooth",block:"start"}));
+   }
+  }catch(e){
+   updateSaveMessage("Submission failed · your draft is retained; try Save again",stage);
+   console.error("SPARK submission failed",{stage,code:e?.code,message:e?.message});
+  }finally{if(btn)btn.disabled=false;}
 }
 
 function recOptions(name){ return RECOMMENDATIONS.map(x=>`<label class="choice"><input type="radio" name="${name}" value="${esc(x)}"> <span>${esc(x)}</span></label>`).join(''); }
@@ -178,7 +275,15 @@ function render(){
  $("#app").innerHTML=html;
  hydrate(t);
  applyDraft(t);
- if(!previewMode){const f=document.querySelector("#form");if(f)f.addEventListener("input",storeDraft);}
+ if(!previewMode){
+  const f=document.querySelector("#form");
+  if(f){
+   const stage=t.id;
+   const changed=()=>{storeDraft();scheduleDraftSave(stage);};
+   f.addEventListener("input",changed);
+   f.addEventListener("change",changed);
+  }
+ }
  const sb=document.querySelector("[data-save]");if(sb)sb.disabled=!!state.locked;
  const conf=$("#conf"); if(conf) conf.addEventListener('input',()=>$("#confVal").textContent=conf.value);
  const form=$("#form"); if(form) form.addEventListener('submit',async e=>{e.preventDefault(); if(state.locked){$("#saveMsg").textContent='Responses are currently locked.';return;} const payload=collect(t.responseType); if(payload.error){$("#saveMsg").textContent=payload.error;return;} await save(t.id,payload);});
@@ -246,7 +351,10 @@ function hydrate(t){
  const fields=['factors','sources','why','hope','review','evidence','reasoning','reopen','insufficient','finalReason']; fields.forEach(k=>{ if(r[k]!=null && $(`#${k}`)) $(`#${k}`).value=r[k]; });
  if(Array.isArray(r.questions)) r.questions.slice(0,3).forEach((q,i)=>{if($(`#q${i+1}`)) $(`#q${i+1}`).value=q;});
  if(Array.isArray(r.areas)) document.querySelectorAll('input[name="area"]').forEach(x=>x.checked=r.areas.includes(x.value));
- if($('#saveMsg')){ $('#saveMsg').textContent='Previously saved'; $('#saveMsg').className='saved'; }
+ if($('#saveMsg')){
+   $('#saveMsg').textContent=r.status==="draft"?"Draft saved automatically · click Save to submit":"Previously submitted";
+   $('#saveMsg').className='saved';
+ }
 }
 
 function collect(type){
