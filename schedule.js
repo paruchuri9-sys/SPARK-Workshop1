@@ -35,7 +35,7 @@ function render(){
   }
   group.appendChild(section);
  }
- if(ownEntry){$("#noneAvailable").checked=!Object.keys(ownEntry.slots||{}).length;$("#participantName").value=ownEntry.name||"";const option=document.querySelector('input[name="followup"][value="'+ownEntry.answer+'"]');if(option)option.checked=true;$("#submitVote").textContent="Update my availability";}
+ if(ownEntry){$("#noneAvailable").checked=ownEntry.slots?.none===true;$("#participantName").value=ownEntry.name||"";const option=document.querySelector('input[name="followup"][value="'+ownEntry.answer+'"]');if(option)option.checked=true;$("#submitVote").textContent="Update my availability";}
  $("#loading").hidden=true;$("#poll").hidden=false;
  renderCounts();
 }
@@ -59,6 +59,7 @@ $("#availabilityForm").addEventListener("submit",async e=>{
  e.preventDefault();if(!config||!uid)return;
  const name=$("#participantName").value.trim(),answer=document.querySelector('input[name="followup"]:checked')?.value;
  const slots=Object.fromEntries([...document.querySelectorAll('input[name="slot"]:checked')].map(n=>[n.value,true]));
+ if($("#noneAvailable").checked)slots.none=true;
  if(!name){$("#saveStatus").textContent="Please enter your name.";return}
  if(Object.keys(slots).length===0&&!$("#noneAvailable").checked){$("#saveStatus").textContent="Select a time or check None of these times.";return}
  if(!["yes","maybe","no"].includes(answer)){ $("#saveStatus").textContent="Please answer the scenario question.";return}
