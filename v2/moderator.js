@@ -203,3 +203,58 @@ $("#publishSummary").addEventListener("click",async()=>{
  try{await set(ref(db,"sessions/"+picked.session+"/published/"+picked.step),picked.payload);$("#summary").insertAdjacentText("beforeend"," Shared with class.");}
  catch(e){$("#summary").textContent="Cannot share summary: "+(e.code||e.message);}
 });
+
+
+function csvCell(v){
+ const raw=String(v==null?"":Array.isArray(v)?v.join(" | "):v);
+ // Prevent spreadsheet formula execution from student-supplied free text.
+ const safe=/^[\s]*[=+@-]/.test(raw)?"'"+raw:raw;
+ return '"'+safe.replace(/"/g,'""')+'"';
+}
+function downloadCsv(filename,columns,rows){
+ const csv="\ufeff"+[columns,...rows].map(row=>row.map(csvCell).join(",")).join("\r\n")+"\r\n";
+ const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function verifyOwner(){
+ if(!sessionId||!auth.currentUser)throw new Error("No authorized classroom session.");
+ const snapshot=await get(ref(db,"sessions/"+sessionId+"/owner"));
+ if(snapshot.val()!==auth.currentUser.uid)throw new Error("Only the session owner may export this data.");
+}
+$("#exportResponses").addEventListener("click",async()=>{
+ const button=$("#exportResponses");button.disabled=true;$("#exportStatus").textContent="Preparing scenario CSV...";
+ try{
+  await verifyOwner();
+  const data=(await get(ref(db,"responses/"+sessionId))).val()||{};
+  const stages=["first-impression","need-to-know","investigate","evidence","preliminary","new-information","final"];
+  const fields={
+   "first-impression":["recommendation","confidence","factors"],
+   "need-to-know":["questions","sources"],
+   "investigate":["areas","why","hope"],
+   "evidence":["review"],
+   "preliminary":["recommendation","evidence","reasoning","confidence"],
+   "new-information":["recommendation","confidence","why"],
+   "final":["recommendation","finalReason","reopen","insufficient"]
+  };
+  const fieldNames=stages.flatMap(stage=>[...fields[stage].map(f=>stage+"."+f),stage+".updatedAt"]);
+  const columns=["participant_key","nickname","group",...fieldNames];
+  const rows=Object.entries(data).map(([key,r])=>[key,r?.participant?.nickname||"",r?.participant?.group||"",
+    ...stages.flatMap(stage=>[...fields[stage].map(f=>r?.[stage]?.[f]??""),r?.[stage]?.updatedAt??""])
+  ]);
+  downloadCsv("spark-"+sessionId+"-scenario-responses.csv",columns,rows);
+  $("#exportStatus").textContent=rows.length+" participant records exported. Keep this file in approved secure storage.";
+ }catch(e){$("#exportStatus").textContent="Export failed: "+(e?.code||e?.message||"unknown error");}
+ finally{button.disabled=false;}
+});
+$("#exportExitTickets").addEventListener("click",async()=>{
+ const button=$("#exportExitTickets");button.disabled=true;$("#exportStatus").textContent="Preparing exit ticket CSV...";
+ try{
+  await verifyOwner();
+  const data=(await get(ref(db,"exitTickets/"+sessionId))).val()||{};
+  const rows=Object.values(data).map(v=>[v.q1||"",v.q2||"",v.q3||"",v.q4||"",v.q5||""]);
+  downloadCsv("spark-"+sessionId+"-exit-tickets.csv",["thinking_hardest","confusion","one_change","missing_information","another_scenario"],rows);
+  $("#exportStatus").textContent=rows.length+" unlinked feedback entries exported. No participant IDs included.";
+ }catch(e){$("#exportStatus").textContent="Exit-ticket export failed: "+(e?.code||e?.message||"unknown error");}
+ finally{button.disabled=false;}
+});
