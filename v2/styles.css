@@ -186,3 +186,13 @@ details summary { cursor: pointer; font-weight: 650; }
 .exit-ticket textarea{display:block;width:100%;font-size:1rem;min-height:75px}
 .export-panel{border-left:5px solid #496f9e}
 .export-panel .actions{flex-wrap:wrap}
+
+
+.export-jump{font-weight:700;text-decoration:underline;text-underline-offset:3px}
+#dataPanel{scroll-margin-top:84px}
+#dataPanel .purge-controls{margin-top:18px;padding-top:12px;border-top:1px solid #d4d9e0}
+#dataPanel .purge-controls label{margin:12px 0;display:block}
+#dataPanel #confirmCode{max-width:220px}
+#dataCounts{line-height:1.5;font-size:.92rem}
+#purgeStatus{font-weight:600}
+#exitSection{scroll-margin-top:145px}
