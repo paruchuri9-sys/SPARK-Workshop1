@@ -137,12 +137,13 @@ async function save(stage, payload){
 
 function recOptions(name){ return RECOMMENDATIONS.map(x=>`<label class="choice"><input type="radio" name="${name}" value="${esc(x)}"> <span>${esc(x)}</span></label>`).join(''); }
 function cardHeader(t){
- let html=`<section class="card"><h1>${esc(t.title)}</h1><p class="step-intro">${esc(t.intro||'')}</p></section>`;
+ let html=`<section class="card stage-intro"><h1>${esc(t.title)}</h1><p class="step-intro">${esc(t.intro||'')}</p></section>`;
  const facts=t.body||[];
  if(facts.length){
   const groups=[];
   for(let i=0;i<facts.length;i+=3)groups.push(facts.slice(i,i+3));
-  html+=groups.map((items,i)=>`<section class="card fact-card"><h2>${t.id==='first-impression'?(i===0?'About the project':i===1?'Jobs, land, and taxes':'What is not decided yet'):'What you know'}</h2><ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></section>`).join('');
+  const titles=t.id==='first-impression'?['The proposed project','Jobs and land','Taxes and open questions']:null;
+  html+=`<div class="${previewMode?'':'fact-grid'}">`+groups.map((items,i)=>`<section class="card fact-card fact-tone-${i%3}" aria-label="${esc(titles?.[i]||'Key information '+(i+1))}"><h2>${esc(titles?.[i]||'Key information '+(i+1))}</h2><ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')+'</div>';
  }
  return html;
 }

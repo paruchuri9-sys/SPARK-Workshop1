@@ -19,7 +19,7 @@ $("#createSession").addEventListener("click",async()=>{
  const btn=$("#createSession");btn.disabled=true;$("#setupError").textContent="";
  try{
    await connect();let code,exists=true;
-   for(let i=0;i<8&&exists;i++){const bytes=new Uint8Array(5);crypto.getRandomValues(bytes);code=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("").toUpperCase();exists=(await get(ref(db,"sessions/"+code+"/owner"))).exists();}
+   for(let i=0;i<8&&exists;i++){const bytes=new Uint8Array(3);crypto.getRandomValues(bytes);code=(Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("").slice(0,5)).toUpperCase();exists=(await get(ref(db,"sessions/"+code+"/owner"))).exists();}
    if(exists)throw Error("Unable to find an unused code.");
    await set(ref(db,"sessions/"+code+"/owner"),auth.currentUser.uid);
    await set(ref(db,"sessions/"+code+"/state"),{currentTab:0,timerEnd:null,timerPausedRemaining:null,locked:false,groupCount:Number($("#groupCount").value),createdAt:Date.now()});
@@ -35,6 +35,7 @@ async function openSession(code){
  $("#sessionLabel").textContent=isOwner?"Classroom ready":"View only";
  $("#groupDescription").textContent=Number(st.val().groupCount||1)===1?"One whole-class group, individual responses":st.val().groupCount+" groups, individual responses";
  $("#joinLink").value=new URL("join.html?session="+encodeURIComponent(code),location.href).href;
+ renderJoinQr();
  $("#authStatus").textContent="Class "+code;
  if(!isOwner){
    $("#syncStatus").textContent="Teacher controls unavailable in this browser. Return to the browser that created this session, or contact the SPARK team.";
@@ -44,6 +45,13 @@ async function openSession(code){
 }
 $("#copyJoin").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#joinLink").value);$("#copyStatus").textContent="Student link copied.";}catch{$("#joinLink").select();$("#copyStatus").textContent="Select and copy the link above."; }});
 $("#openStudent").addEventListener("click",()=>window.open($("#joinLink").value,"_blank","noopener"));
+function makeQr(target,size){
+ target.textContent="";
+ if(typeof QRCode!=="function"){target.textContent="QR unavailable. Use the student link.";return;}
+ new QRCode(target,{text:$("#joinLink").value,width:size,height:size,correctLevel:QRCode.CorrectLevel.M});
+}
+function renderJoinQr(){makeQr($("#qrCode"),128);$("#qrSessionLabel").textContent="Class code: "+sessionId;}
+$("#enlargeQr").addEventListener("click",()=>{makeQr($("#qrLarge"),300);$("#qrDialog").showModal();});
 if(requested)openSession(requested).catch(e=>{showError(e.message);$("#setup").hidden=false;$("#classroom").hidden=true;});
 else $("#authStatus").textContent="Create a class to begin";
 
@@ -95,11 +103,19 @@ function renderView(){
  $("#viewTitle").textContent=t.title;
  $("#readAloud").innerHTML=(t.readAloud||[]).map(x=>"<li>"+esc(x)+"</li>").join("");
  $("#modNote").textContent=t.modNote||"";
- $("#viewMeta").textContent="Suggested time: "+(t.minutes||5)+" min";
+ $("#viewMeta").textContent="Suggested time: "+(t.minutes||5)+" min. Prompts are optional; allow different evidence-based decisions.";
  $("#prevView").disabled=viewTab===0;$("#nextView").disabled=viewTab===steps.length-1;
  $("#openStep").textContent=viewTab===live?"Students are on this step":viewTab<live?"Students already have this step":"Open this step for students";
  $("#openStep").disabled=!isOwner||viewTab<=live;
+ $("#openAndTime").disabled=!isOwner||viewTab!==live+1;
+ $("#openAndTime").textContent=viewTab===live+1?"Open next step + start "+(t.minutes||5)+" min timer":"Select the next unopened step to start timer";
 }
+$("#openAndTime").addEventListener("click",async()=>{
+ if(!isOwner||viewTab!==state.currentTab+1)return;
+ const button=$("#openAndTime");button.disabled=true;
+ const ok=await patch({currentTab:viewTab,locked:false,timerEnd:now()+(steps[viewTab].minutes||5)*60000,timerPausedRemaining:null});
+ if(!ok)button.disabled=false;
+});
 $("#prevView").addEventListener("click",()=>setView(viewTab-1));
 $("#nextView").addEventListener("click",()=>setView(viewTab+1));
 $("#openStep").addEventListener("click",async()=>{

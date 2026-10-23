@@ -20,7 +20,7 @@ $('session').value=(query.get('session')||'').toUpperCase().replace(/[^A-Z0-9]/g
 async function verify(){
   const code=$('session').value.toUpperCase().replace(/[^A-Z0-9]/g,'');
   $('error').textContent='';$('join').disabled=true;groupCount=0;validatedCode='';
-  if(!/^[A-F0-9]{10}$/.test(code)){$('error').textContent='Enter the 10-character classroom code.';$('join').disabled=false;return;}
+  if(!/^(?:[A-F0-9]{5}|[A-F0-9]{10})$/.test(code)){$('error').textContent='Enter the 5-character classroom code (older 10-character codes also work).';$('join').disabled=false;return;}
   try{
     if(!auth.currentUser)await signInAnonymously(auth);
     const snap=await get(ref(db,'sessions/'+code+'/state'));
