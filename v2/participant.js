@@ -6,7 +6,9 @@ import { SCENARIO, RECOMMENDATIONS } from "./scenario.js";
 
 const params = new URLSearchParams(location.search);
 const previewMode = ["1","true","yes"].includes((params.get("preview") || "").toLowerCase());
-const sessionId = (params.get("session") || "demo").replace(/[^a-zA-Z0-9_-]/g, "");
+const sessionId = (params.get("session") || "").replace(/[^a-zA-Z0-9_-]/g, "");
+const groupParam = Number(params.get("group") || 1);
+if (!previewMode && !sessionId) location.replace("join.html");
 
 let db = null, uid = "preview";
 let state = { currentTab: previewMode ? SCENARIO.tabs.length - 1 : 0, timerEnd:null, timerPausedRemaining:null, locked:false };
@@ -22,9 +24,16 @@ if (!previewMode) {
   const cred = await signInAnonymously(auth);
   uid = cred.user.uid;
   stateRef = ref(db, `sessions/${sessionId}/state`);
+  const sessionSnapshot = await new Promise(resolve => onValue(stateRef, resolve, {onlyOnce:true}));
+  const groupCount = Number(sessionSnapshot.val()?.groupCount || 0);
+  if(!sessionSnapshot.exists() || groupCount < 1 || !Number.isInteger(groupParam) || groupParam < 1 || groupParam > groupCount) { location.replace("join.html?session="+encodeURIComponent(sessionId)); throw new Error("Invalid classroom session/group."); }
   responseBase = `responses/${sessionId}/${uid}`;
   const presenceRef = ref(db, `sessions/${sessionId}/presence/${uid}`);
-  await set(presenceRef, { online:true, joinedAt:serverTimestamp() });
+  const aliasKey = "sparkAlias_"+sessionId;
+  let alias = sessionStorage.getItem(aliasKey);
+  if(!alias){ const animals=["Heron","Fox","Owl","Otter","Raven","Falcon","Turtle","Robin"];const bytes=new Uint8Array(3);crypto.getRandomValues(bytes);alias=animals[bytes[0]%animals.length]+"-"+String((bytes[1]*256+bytes[2])%900+100);sessionStorage.setItem(aliasKey,alias); }
+  await update(ref(db, responseBase+"/participant"), {nickname:alias,group:groupParam});
+  await set(presenceRef, { online:true, group:groupParam, nickname:alias, joinedAt:serverTimestamp() });
   onDisconnect(presenceRef).remove();
 }
 const $ = s => document.querySelector(s);
@@ -36,12 +45,13 @@ if (previewMode) {
 } else {
   onValue(ref(db,responseBase), snap => { myResponses = snap.val() || {}; render(); });
   onValue(stateRef, snap => {
+    if(!snap.exists()) { $("#status").textContent="Session not found";return; }
     const nextState = { ...state, ...(snap.val() || {}) };
     if (nextState.currentTab > state.currentTab) activeTab = nextState.currentTab;
     if (activeTab > nextState.currentTab) activeTab = nextState.currentTab;
     state = nextState;
     renderTabs(); render(); startTimer();
-    $("#status").textContent = "Connected";
+    $("#status").textContent = "Connected | Group "+groupParam;
   }, () => { $("#status").textContent = "Connection interrupted"; });
 }
 
