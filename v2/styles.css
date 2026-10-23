@@ -179,3 +179,10 @@ details summary { cursor: pointer; font-weight: 650; }
 .live-advance #advanceLive{font-size:13px}
 .evidence-grid{align-items:start}
 .evidence-grid>.evidence-card{align-self:start}
+
+/* Feedback is a distinct, optional activity after the seven reasoning stages */
+.exit-ticket{border-left:5px solid #3c806a;background:#f5faf7}
+.exit-ticket label{font-weight:650;margin:16px 0 6px}
+.exit-ticket textarea{display:block;width:100%;font-size:1rem;min-height:75px}
+.export-panel{border-left:5px solid #496f9e}
+.export-panel .actions{flex-wrap:wrap}
