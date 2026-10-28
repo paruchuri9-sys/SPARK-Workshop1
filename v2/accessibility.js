@@ -7,8 +7,6 @@ const terms={
 'defer':'Wait to decide until important missing information is available.',
 'ratepayers':'People and businesses who pay electricity or other utility bills.',
 'rezoned':'Changed the official rules about how land can be used.',
-'wastewater':'Used water that requires treatment.',
-'treated wastewater':'Used water that has been cleaned at a treatment plant.',
 'MW':'Megawatt, a measurement of electrical power equal to one million watts.',
 'kV':'Kilovolt, a measurement of electrical voltage equal to 1,000 volts.'
 };
