@@ -1,0 +1,5 @@
+.spark-vocab-controls{margin:0 0 14px;padding:12px;border:1px solid #d7d0de;border-radius:10px;background:#fff;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.spark-term{display:inline;font:inherit;font-weight:inherit;color:inherit;text-align:inherit;background:transparent;border:0;border-bottom:2px dotted #582C83;border-radius:0;padding:0;cursor:help}
+.spark-term:focus-visible{outline:2px solid #582C83;outline-offset:2px}
+.spark-definition{flex-basis:100%;padding:10px 12px;border-left:4px solid #582C83;background:#f5f3f7;border-radius:6px}
+.spark-definition p{margin:6px 0}
