@@ -77,7 +77,7 @@ $('analyze').onclick=async()=>{
    pdfBase64=String(data).split(',')[1];
   }
   const r=await call({action:'analyze',lesson:$('lesson').value,lessonUrl:file?'':$('lessonUrl').value.trim(),pdfBase64,grade:$('grade').value});
-  moments=r.moments;currentVersion=r.versions?.build||'unknown';$('moments').replaceChildren();
+  moments=r.moments;currentVersion=r.versions?.build||'unknown';$('versionLabel').textContent='Design '+(r.versions?.design||'unverified')+' · Reasoner '+(r.versions?.reasoner||'unverified')+' · Build '+currentVersion;$('moments').replaceChildren();
   if(!moments.length){const empty=document.createElement('p');empty.textContent='No worthwhile additional reasoning opportunity was identified. You may return to the lesson or record your assessment below.';$('moments').append(empty);}
   for(const m of moments){
    const card=document.createElement('article');
