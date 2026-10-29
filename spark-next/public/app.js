@@ -11,7 +11,7 @@ const reasoningExplainers={
  'Decision under uncertainty':'Choose a defensible action when evidence is incomplete, and explain what additional information might change the choice.'
 };
 const $=id=>document.getElementById(id);
-const sessionId=crypto.randomUUID();let moments=[],lessonId=crypto.randomUUID();let builtIds='',currentPlan=null;
+const sessionId=crypto.randomUUID();let moments=[],lessonId=crypto.randomUUID();let builtIds='',currentPlan=null;let analysisStartedAt=null;let independentSnapshot='';let reviewLocked=false;let currentVersion='unknown';
 function showPage(page){
  for(const [id,number] of [['source',1],['opportunities',2],['result',3]])$(id).hidden=id!==page;
  const n={source:1,opportunities:2,result:3}[page];
@@ -67,6 +67,7 @@ $('analyze').onclick=async()=>{
  const button=$('analyze');button.disabled=true;status('Analyzing lesson and saving research events…');$('result').hidden=true;
  try{
   lessonId=crypto.randomUUID();currentPlan=null;moments=[];$('moments').replaceChildren();$('opportunities').hidden=true;
+  analysisStartedAt=new Date().toISOString();independentSnapshot=$('independentNotes').value.trim();reviewLocked=true;$('independentNotes').readOnly=true;
   const file=$('lessonPdf').files[0];
   let pdfBase64=null;
   if(file){
@@ -76,7 +77,8 @@ $('analyze').onclick=async()=>{
    pdfBase64=String(data).split(',')[1];
   }
   const r=await call({action:'analyze',lesson:$('lesson').value,lessonUrl:file?'':$('lessonUrl').value.trim(),pdfBase64,grade:$('grade').value});
-  moments=r.moments;$('moments').replaceChildren();
+  moments=r.moments;currentVersion=r.versions?.build||'unknown';$('moments').replaceChildren();
+  if(!moments.length){const empty=document.createElement('p');empty.textContent='No worthwhile additional reasoning opportunity was identified. You may return to the lesson or record your assessment below.';$('moments').append(empty);}
   for(const m of moments){
    const card=document.createElement('article');
    const line=document.createElement('div');line.className='moment-head';
@@ -99,6 +101,8 @@ $('analyze').onclick=async()=>{
     const check=document.createElement('details'),cs=document.createElement('summary');cs.textContent='Optional '+({'multiple_choice':'multiple-choice','show_of_hands':'show-of-hands','short_response':'short-response'}[m.quick_check_format]||'quick')+' check';check.append(cs);
     const q=document.createElement('p');q.textContent=m.quick_check.replace(/^(multiple_choice|show_of_hands|short_response):\s*/i,'');const aim=document.createElement('p');aim.className='status';aim.textContent='Checks '+m.quick_check_purpose.replaceAll('_',' ')+'.';check.append(q,aim);body.append(check);
    }
+   const review=document.createElement('div');review.className='moment-review';review.innerHTML='<label>Educator judgment <select class="review-decision"><option value="">Not yet assessed</option><option value="accept">Accept</option><option value="edit">Edit</option><option value="reject">Reject</option></select></label><label>Why? <textarea class="review-reason" placeholder="Brief instructional reason"></textarea></label><label>Revised wording (if edited) <textarea class="review-edit" placeholder="Optional revised teacher question"></textarea></label><label>Was this already in your lesson? <select class="review-coverage"><option value="unknown">Cannot determine</option><option value="already_present">Already present</option><option value="strengthened">Present but strengthened</option><option value="uncovered">Not explicitly present</option></select></label>';
+   review.dataset.momentId=m.id;body.append(review);
    details.append(summary,body);line.append(choose,details);card.append(line);$('moments').append(card);
   }
   showPage('opportunities');selection();status('Saved '+moments.length+' generated opportunities · '+r.versions.build);
@@ -114,4 +118,16 @@ $('build').onclick=async()=>{
   renderPlan(r.activity,selected);
   $('planTime').textContent='~'+time+' min additional';builtIds=ids.join(',');showPage('result');$('buildStatus').textContent='Teaching plan generated and saved.';
  }catch(e){$('buildStatus').textContent='Could not build plan: '+e.message;}finally{btn.disabled=false;}
+};
+
+// Evidence v0.2: educator judgment is separate from model-generated coverage.
+$('saveReview').onclick=async()=>{
+ const output=$('reviewStatus');
+ if(!$('researchConsent').checked){output.textContent='Consent is required to save educator observations. No data sent.';return;}
+ if(!reviewLocked){output.textContent='Analyze a lesson first.';return;}
+ const judgments=[...document.querySelectorAll('.moment-review')].map(node=>({moment_id:node.dataset.momentId,decision:node.querySelector('.review-decision').value,reason:node.querySelector('.review-reason').value.trim(),revision:node.querySelector('.review-edit').value.trim(),teacher_coverage:node.querySelector('.review-coverage').value}));
+ const invalid=judgments.some(j=>j.decision && !j.reason);
+ if(invalid){output.textContent='Please give a brief reason for each accept, edit, or reject judgment.';return;}
+ const consented={participant_code:$('participantCode').value.trim().slice(0,40),study_arm:$('studyArm').value,independent_notes:independentSnapshot,reviewed_at:new Date().toISOString(),started_at:analysisStartedAt,source_build:currentVersion,judgments};
+ try{const r=await call({action:'event',eventType:'teacher_feedback',feedback:consented});output.textContent=r.logged?'Educator review saved.':'Review not saved.';}catch(e){output.textContent='Review was not saved: '+e.message;}
 };
